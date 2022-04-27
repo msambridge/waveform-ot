@@ -446,6 +446,33 @@ def buildFingerprintwindows(t,wave,Nu=None,Nt=None,u0=None,u1=None):
     return grid    
 
 def BuildOTobjfromWaveform(t,wavein,gridin,OTdata,norm=False,verbose=False,lambdav=None,deriv=False,fpgrid=None):
+    '''
+        Create two objects:
+            - A fingerprint object containing the input time series, window parameters and its nearest distance density field.
+            - An Optimal Transport PDF object based on the 2D density field from the first object.
+
+        Inputs:
+            t - 1d float array, shape (Nt,): time values of time series.
+            wave - 1d float array, shape (Nt,): amplitudes of time series.
+            gridin - tuple; (t0,t1,u0,u1,Nug,Ntg)
+                    du = amplitude limits of waveform
+                    u0 = lower limit on amplitude box in un-normalized co-ordinates
+                    u1 = upper limit on amplitude box in un-normalized co-ordinates
+                    t0 = lower limit on time axis in un-normalized co-ordinates
+                    t1 = upper limit on time axis in un-normalized co-ordinates
+                    Nug = number of grid points along amplitude axis in time-amplitude window
+                    Ntg = number of grid points along time axis in time-amplitude window
+            OTdata - list, list of optimisation data (used here to supply all transformed grids, OTdata['obs_grids01')
+            norm -  logical to optionally calculate grid from, t, wave; Default(False).
+            verbose - logilcal: write out sone timing information.
+            lambdav - float: the distance scaling parameter used in the density field estimation.
+            deriv - logical; switch to calculate and derivatives of the 2D density field with respect to the waveform amplitudes and return as a parameter of the class object.
+
+        Outputs:
+            wf - Fingerprint class object; 
+            OT.OTpdf - Optimal Transport probability density function object for 2D density field.
+        
+    '''
 
     fpgrid=None
     
@@ -498,6 +525,34 @@ def BuildOTobjfromWaveform(t,wavein,gridin,OTdata,norm=False,verbose=False,lambd
 
 # Calculates Wasserstein misfit for all waveforms 
 def CalcWasserWaveform(wfsource,wftarget,wf,distfunc='W2',deriv=False,Nproj=10,returnmarg=False):
+    '''
+    
+        Calculates Wasserstein distances between time and amplitude marginals of 2D waveform density functions.
+        Optionally calculates derivaties as well with respect to waveform amplitude and origin time of window.
+        
+        Inputs:
+            wfsource - OTpdf class object containing the Fingerprint of the predicted (source) waveform.
+            wftarget - OTpdf class object containing the Fingerprint of the observed (target) waveform.
+            wf - Fingerprint class object containing the predicted waveform.
+            distfunc - string; defined the type of Wasserstein distance (options `W1' or 'W2' for W_p^p, p=1,2)
+            deriv - logical; switch to calculate derivatives of W_p^p with respect to the waveform amplitudes.
+            returnmarg - logical; switch to return all results for both time and amplitude marginals (otherwise return average results) 
+
+        Outputs:
+            w - list of floats; length 1 or 2; Wasserstein between (time,amplitude) marginals 
+                for source and target (returnmarg=True) or their average (returnmarg=False)
+                
+            wf.pdfdMarg - list of 1 or 2 ndarrays; each length (nt,); Derivatives of Wasserstein distances with 
+                         respect to waveform amplitudes for each marginal (if deriv=True,returnmarg=True); 
+                         else their average (returnmarg=False).
+                         
+            dwg - list of floats; shape 1 or 2; Derivatives of Wasserstein distances with 
+                         respect to origin time of window (if deriv=True,returnmarg=True); 
+                         else their average (returnmarg=False).
+                         
+            nt is the number of points along the predicted time series (wf.nt)
+            
+    '''
     # Calculate derivatives of Wasserstein wrt unormalized amplitudes of waveform
     if(deriv):
         out = OT.MargWasserstein(wfsource,wftarget,derivatives=True,distfunc=distfunc,returnmargW=returnmarg) # calculate Wasserstein and derivatives

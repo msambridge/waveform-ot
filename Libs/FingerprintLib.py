@@ -156,6 +156,11 @@ class waveformFP(object): # Waveform object for waveform fingerprint calculation
             print(' calcpdf:\n'+' Time taken for distance field:',twd,'\n Time taken for pdf field:',self.tcalc_pdf)
             
     def PDFderiv(self,chainmatrix=None): # calculate derivatives of PDF field with respect to unormalized waveform amplitude
+        '''
+        
+        Calculate derivatives of PDF field with respect to waveform amplitudes
+
+        '''
         if(type(chainmatrix) == np.ndarray):
             pdfrow = self.pdf.flatten()*chainmatrix.flatten()
         else: 
@@ -174,6 +179,11 @@ class waveformFP(object): # Waveform object for waveform fingerprint calculation
         self.pdfd = -s/self.lam
 
     def PDFderivMarg(self,chainmatrix): # calculate derivatives of PDF field with respect to unormalized waveform amplitude
+        '''
+        
+        Calculate derivatives of (time,amplitude) marginals with respect to waveform amplitudes
+
+        '''
         pdfrowX = self.pdf.flatten()*chainmatrix[0].flatten()
         pdfrowY = self.pdf.flatten()*chainmatrix[1].flatten()
 
@@ -749,7 +759,11 @@ def plot_rays(plotind,wf,title,col1,col2,filename='no',fxsize=None,fysize=None):
     return
 
 def plot_LS(f,wf,xl,yl,title,col1,col2,aspect=False,filename='no',pdf=False,ncon=10,fxsize=None,fysize=None):
+    '''
+        Create plot of single nearest distance Fingerprints and waveform.
     
+    '''
+
     if(aspect):
         if(fxsize is not None and fysize is not None):
             fig = plt.figure(figsize=(fxsize,fysize))
@@ -784,6 +798,10 @@ def plot_LS(f,wf,xl,yl,title,col1,col2,aspect=False,filename='no',pdf=False,ncon
     return 
 
 def plot_2LS(wf1,wf2,title1,title2,col1,col2,filename='no',pdf=False,ncon=10,fxsize=None,fysize=None,aspect=False):
+    '''
+        Create plot of a pair of nearest distance Fingerprints and waveforms.
+
+    '''
     
     if(fxsize is not None and fysize is not None):
         fig = plt.figure(figsize=(fxsize,fysize))

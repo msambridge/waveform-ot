@@ -35,7 +35,30 @@ def ricker(f, length=0.128, dt=0.001,deriv=False):
 #      amp  : Amplitude factor so that the maximum amplitude peak as at amp
 #      f    : Dominant frequency factor
 
-def rickerwavelet(tpert,amp,f,length=0.128, dt=0.001,trange=[-2.,2.],sigma_amp=0.,sigma_cor=0.,deriv=False,seed=0.):
+def rickerwavelet(tpert,amp,f, trange=[-2.,2.],sigma_amp=0.,sigma_cor=0.,deriv=False,seed=0.):
+    '''
+    
+        Create a double Ricker wavelet
+        
+        See eqn. (36) of Sambridge et al. (2022) for details of all parameters.
+
+        Inputs:
+            tpert - float; Centre of double Ricker wavelet in time
+            amp   - float; Amplitude factor so that the maximum amplitude peak as at amp
+            f     - float; Dominant frequency factor
+            deriv - logical; switch to calculate and derivatives of the waveform amplitudes and return as an ndarray
+            trange - ndarray, shape(nt); time limits of output waveform
+            sigma_amp - float; Amplitude of Gaussian noise to be added to waveform
+            sigma_cor - float; correlation length (passed to Gaussian process code gp.Createcurve)
+
+        Outputs:
+            t - ndarray; shape(nt);
+            wpnew - ndarray; shape (nt); amplitude of double ricker wavelet
+            dwpd - ndarray; shape(3,nt); derivative of amplitude with respect to time offset, amplitude and frequency parameters. 
+
+            nt the number of samples in the output is determined by 2*length/dt.
+    '''
+
     freq = f*25*4/128 # A wavelength of 25 Hz
     tr, w = ricker(freq,length=4,dt=4/128)
     if(deriv): tr, w, dw = ricker(freq,length=4,dt=4/128,deriv=True)
@@ -109,6 +132,11 @@ def plotrickers(t1,w1,t2,w2,tlim=(False,False),ulim=(False,False),clean=False,
 # plot ricker wavelets similar to plotrickers with some added features
 def plotrickers_special(t1,w1,t2,w2,tlim=(False,False),ulim=(False,False),clean=False,
                 title='Ricker Wavelets',ref=[False,False],xlab=False,offset=''):
+    '''
+    
+            Plot pair of ricker wavelets
+    
+    '''
     if(offset==''):
         plt.plot(t1,w1,lw=0.75)
     else:
@@ -134,6 +162,11 @@ def plotrickers_special(t1,w1,t2,w2,tlim=(False,False),ulim=(False,False),clean=
 def plotsurface(source,x,y,xtrue,ytrue,xlab='x',ylab='y',lw=1.0,base=False,
                  l=0.5,alt=55,lstyle='c--',zorder=99,levels=10,offset=0,lcmap=cm.cubehelix,
                 dpi=600,filename='3Dsurface.png'):
+    '''
+    
+            Plot misfit surface
+    
+    '''
     xv, yv = np.meshgrid(x,y)
     # Set viewer position 
     azimuth = -45.0
@@ -185,10 +218,10 @@ def BuildOTobjfromWaveform(t,wave,grid,norm=False,verbose=False,lambdav=None,der
                     t1 = upper limit on time axis in un-normalized co-ordinates
                     Nug = number of grid points along amplitude axis in time-amplitude window
                     Ntg = number of grid points along time axis in time-amplitude window
-            norm -  logical to optinally calculate grid from, t, wave; Default(False).
+            norm -  logical to optionally calculate grid from, t, wave; Default(False).
             verbose - logilcal: write out sone timing information.
             lambdav - float: the distance scaling parameter used in the density field estimation.
-            deriv - logical; switch to calculate and derivatives of the 2D density field with respect to teh waveform amplitudes and return as a parameter of the class object.
+            deriv - logical; switch to calculate and derivatives of the 2D density field with respect to the waveform amplitudes and return as a parameter of the class object.
 
         Outputs:
             wf - Fingerprint class object; 
@@ -248,8 +281,37 @@ def CalcWasserWaveform_old(wfsource,wftarget,wf,distfunc='W2',deriv=False,Nproj=
     else:
         return w
 
-def CalcWasserWaveform(wfsource,wftarget,wf,distfunc='W2',deriv=False,Nproj=10,returnmarg=False):
+def CalcWasserWaveform(wfsource,wftarget,wf,distfunc='W2',deriv=False,returnmarg=False):
     # Calculate derivatives of Wasserstein wrt unormalized amplitudes of waveform
+    '''
+    
+        Calculates Wasserstein distances between time and amplitude marginals of 2D waveform density functions.
+        Optionally calculates derivaties as well with respect to waveform amplitude and origin time of window.
+        
+        Inputs:
+            wfsource - OTpdf class object containing the Fingerprint of the predicted (source) waveform.
+            wftarget - OTpdf class object containing the Fingerprint of the observed (target) waveform.
+            wf - Fingerprint class object containing the predicted waveform.
+            distfunc - string; defined the type of Wasserstein distance (options `W1' or 'W2' for W_p^p, p=1,2)
+            deriv - logical; switch to calculate derivatives of W_p^p with respect to the waveform amplitudes.
+            returnmarg - logical; switch to return all results for both time and amplitude marginals (otherwise return average results) 
+
+        Outputs:
+            w - list of floats; length 1 or 2; Wasserstein between (time,amplitude) marginals 
+                for source and target (returnmarg=True) or their average (returnmarg=False)
+                
+            wf.pdfdMarg - list of 1 or 2 ndarrays; each length (nt,); Derivatives of Wasserstein distances with 
+                         respect to waveform amplitudes for each marginal (if deriv=True,returnmarg=True); 
+                         else their average (returnmarg=False).
+                         
+            dwg - list of floats; shape 1 or 2; Derivatives of Wasserstein distances with 
+                         respect to origin time of window (if deriv=True,returnmarg=True); 
+                         else their average (returnmarg=False).
+                         
+            nt is the number of points along the predicted time series (wf.nt)
+            
+    '''
+
     if(deriv):
         out = OT.MargWasserstein(wfsource,wftarget,derivatives=True,distfunc=distfunc,returnmargW=returnmarg) # calculate Wasserstein and derivatives
         w, dw, dwg = out
@@ -335,6 +397,12 @@ def findres(Wits,Wdata):
     return was,models,waves
 
 def plotmisfit(ws,title='Wasserstein distance vs iteration',filename='Figures/wasser_opt.pdf',second=None,log=False,style1='co-',style2='co-'): # plot misfits
+    '''
+    
+            Plot misfit over iterations 
+    
+    '''
+    
     fig = plt.figure(figsize=(6,4))
     plt.title(title)
     plt.xlabel('Iteration')
@@ -409,6 +477,12 @@ def plotwfit_3panels(tobs,wobs,i,wfplot,was,ls,it,w,l2,xlim=[-2.1,7.1],ylim=[-1.
 #plt.show()
 
 def plotMarginals(wfwave,wf,tag='_',fxsize=None,fysize=None):
+    '''
+    
+            Plot marginals of 2D density function from waveform Fingerpeint and OTpdf classes. 
+    
+    '''
+
     wf.setMarginals()  # Calculate marginals
     
 
