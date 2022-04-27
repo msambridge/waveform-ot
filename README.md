@@ -1,4 +1,4 @@
-# ggac151 
+# waveform-ot
 
 This package provides a pure-Python implementation of algorithms described in [Sambridge, Jackson & Valentine, Geophysical Journal International, 2022](https://academic.oup.com/gji/advance-article-abstract/doi/10.1093/gji/ggac151/6572363).
 
