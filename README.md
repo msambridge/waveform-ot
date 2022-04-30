@@ -2,7 +2,7 @@
 
 This package provides a pure-Python implementation of algorithms described in [Sambridge, Jackson & Valentine, Geophysical Journal International, 2022](https://academic.oup.com/gji/advance-article-abstract/doi/10.1093/gji/ggac151/6572363).
 
-The purpose is to demonstrate the theory described in the above paper while also providing examples of access to the underliying Optimal Transport library `OTlib.py` and time series Fingerprint library `FingerprintLib.py`.
+The purpose is to demonstrate the theory described in the above paper while also providing examples of access to the underlying Optimal Transport library `OTlib.py` and time series Fingerprint library `FingerprintLib.py`.
 
 ## Contents
 - [Introduction](#introduction)
@@ -18,8 +18,9 @@ The current package demonstrates the following calculations:
 - Computation of 1D time and amplitude marginals from the 2D density field.
 - Calculation of Wasserstein distances between observed and predicted  time and amplitude marginals using formulae in Sambridge et al. (2022)
 - Calculation of derivatives of Wasserstein distances with respect to time series amplitudes.
-- Demonstration of optimisation of Wasserstein misfits to fit noisy Double Ricker wavelets as a function of three parameters.
-- Demonstration of optimisation of Wasserstein misfits to fit noisy seismic displacement waveforms (produced by package [pyprop8](https://github.com/valentineap/pyprop8)) based on a 1D seismic velocity model.
+- Optimal Transport calculations for a set of point masses in 1D
+- Optimisation of Wasserstein misfits to fit noisy Double Ricker wavelets as a function of three parameters.
+- Optimisation of Wasserstein misfits to fit noisy seismic displacement waveforms (produced by package [pyprop8](https://github.com/valentineap/pyprop8)) based on a 1D seismic velocity model.
 
 
 ## Jupyter notebooks
@@ -44,7 +45,7 @@ This notebook makes use of Andrew Valentine's pyprop8 implementation of of the s
 needs to be installed separately. Instructions of how to do this appear [here](https://pypi.org/project/pyprop8/).
 
 ## Citing this package
-If you make use of this code, please acknowledge the work that went into developing it! In particular, if you are preparing a publication, we would appreciate it if you cite the paper describing the general method used here:
+If you make use of this code, please acknowledge the work that went into developing it. In particular, if you are preparing a publication, we would appreciate it if you cite the paper describing the general method used here:
 
 - [Sambridge, M., Jackson, A., & Valentine, A. P. (2022)](https://academic.oup.com/gji/advance-article-abstract/doi/10.1093/gji/ggac151/6572363) "Geophysical Inversion and Optimal Transport", Geophysical Journal International, *in press*.
 

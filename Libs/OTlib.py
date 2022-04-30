@@ -4,7 +4,9 @@
 #
 # Library for solution of Optimal Transport problems using various algorithms.
 #
-# Can perform calculation of Wasserstein W1 and W2 metrics for arbitrary 1D PDFs.
+# Can perform calculation of Wasserstein W1 and W2 metrics for arbitrary 1D PDFs
+# as well as approximate Wasserstein distances for 2D PDFs using either a Marginal 
+# or Sliced Wasserstein algorithm.
 #
 # Makes use of third party Linear programming and Monge-Ampere solvers and compares to analytically derived results
 #
@@ -12,18 +14,18 @@
 # ANU June 2020.
 #
 #
-# Note to self _orig versions can be deleted
-#
 import numpy as np
 import matplotlib.pyplot as plt
-#import optimaltransport as ot
 from scipy.optimize import linprog
 from scipy.optimize import lsq_linear
 import bisect
 from scipy.ndimage.filters import gaussian_filter
 from sklearn.metrics import pairwise_distances
-import ot as ot # import POT library
-from inspect import isfunction
+try:
+    import ot as ot # import POT library
+    noPOTlibrary = False
+except ImportError:
+    noPOTlibrary = True
 
 class Error(Exception):
     """Base class for other exceptions"""
@@ -72,14 +74,18 @@ class MarginalWassersteinError(Exception):
         +'\n \n'
         super().__init__(msg)
 
+class POTlibraryError(Exception):
+    """Raised when POT library is not installed"""
+    def __init__(self,msg=''):
+        super().__init__('\n POT library is not installed \n')
+
 class OTpdf(object): # PDF object for OT library
     """
     Optimal transport PDF object. 
     
     A Class that is used by various routines to calculate Wasserstein distances 
-    and transport plans between pairs of such objects.
+    and transport plans between pairs of OTpdf objects.
     
-    Author: M. Sambridge
     """
     def __init__(self,pdf):
         if(np.min(pdf[0])< 0.0): raise PDFSignError()
@@ -111,6 +117,15 @@ class OTpdf(object): # PDF object for OT library
         self.ProjNum = -1
         
     def setSliced(self,Nproj,org): # build projected PDF for Nproj angles and store within class
+        """
+            OTpdf class function. 
+    
+            Calculates sliced distributions from 2D point masses
+            Input:
+                Nproj - integer; Number of slices to be used (regularly spaced in angle about org)
+                org - ndarray, shape(2); (x,y) origin about which to form slices.
+                
+        """
         if(self.type !='2D'): raise TargetSource2DShapeError
         self.nproj = Nproj
         self.origin = org
@@ -129,6 +144,12 @@ class OTpdf(object): # PDF object for OT library
         self.calcproj = False 
 
     def setMarginals(self): # build projected PDF for Nproj angles and store within class
+        """
+            OTpdf class function. 
+    
+            Calculates Marginal distributions from 2D PDF by integrating of x and y.
+                
+        """
         if(self.type !='2D'): raise TargetSource2DShapeError
         self.nproj = 2
         f0 = np.sum(self.pdf,axis=0) # marginal PDF over first axis
@@ -376,6 +397,9 @@ def _optimaltransport(sourcein, targetin): # Mike Snow's OT routines for discret
     Gives a metric to compare signals/distributions. Extends to compare points clouds in bins of interest in the signal.
 
     Assumes signals as numpy arrays. by Mike Snow
+    
+    https://github.com/mike-snow/1D-optimal-transport
+    
     """    
 
     # normalise densities to have equal sum. Integers for ease.
@@ -542,138 +566,6 @@ def plotWasser(xp,Fp,Gp,t,IF,IG,x,IGF,xmIFGsq,iFGdiff,filename='Null'):
     plt.tight_layout()
     plt.show()
     return
-
-# Calculate pth power of Wasserstein metric, W_p^p(f,g), for p=1 and 2 for 1-D PDFs of arbitrary length and location
-
-def wasser_orig(source,target,distfunc='W12',returnplan=False,deriv=False):      
-
-    # Note: the Wasserstein distance is defined as 1/p pth power of the output, which only affects the W2 value
-    # This routine assumes that (f,fx) and (g,gx) are sorted in ascending order of fx and gx respectively
-    
-    calcW1,calcW2 = _checkdistfunc(distfunc)
-
-    if(False):             # normalize PDFs and calculate cummulative sums
-        fn = f/np.sum(f)           # FOR SOME SPECIAL CASES THIS ORDER OF CALCULATIONS CAUSED ch[-2] > 1.0 DUE TO ROUNDING
-        cf = np.cumsum(fn)
-        gn = g/np.sum(g)
-        cg = np.cumsum(gn)
-        cf[-1] = 1.0
-        cg[-1] = 1.0
-    else:
-        fx = source.x
-        gx = target.x
-        cf = source.cdf
-        cg = target.cdf
-
-    tk = np.sort(np.append(cf[:-1],cg))
-    indf = list(map(lambda x:bisect.bisect_left(cf,x) ,tk))
-    indg = list(map(lambda x:bisect.bisect_left(cg,x) ,tk))
-    xft = fx[indf]
-    xgt = gx[indg]
-    #xft = fx[list(map(lambda x:bisect.bisect_left(cf,x) ,tk))]
-    #xgt = gx[list(map(lambda x:bisect.bisect_left(cg,x) ,tk))]
-    dtk = np.insert(tk[1:] - tk[:-1],0,tk[0])
-    if(returnplan):
-        m = len(dtk)
-        H = np.zeros((source.n,target.n,m))
-        #for i in range(len(dtk)):
-        #    H[indf[i],indg[i]] += dtk[i]
-        H[indf,indg,np.arange(m)] = dtk
-        H = H.sum(2)     
-    dxft = np.abs(xft-xgt)
-
-    out = []
-    if(calcW1): 
-        W1 = np.dot(dxft,dtk)
-        #dW1 = np.zeros(n)
-        out += [W1]
-    if(calcW2): 
-        dsqxft = np.multiply(dxft,dxft)
-        W2 = np.dot(dsqxft,dtk)
-        #dW2 = np.zeros(n)
-        out += [W2]
-    if(returnplan): 
-        out += [H]
-    return out
-
-
-def wasser_deriv_withloop(source,target,distfunc='W12',returnplan=False,checkCommonCDF=False,ignoreCommonCDFerror=False):      
-
-    calcW1,calcW2 = _checkdistfunc(distfunc)
-
-# Calculate pth power of Wasserstein metric W_p^p(f,g) and derivatives 
-# for p=1 and 2 for 1-D PDFs of arbitrary length and location
-#
-# Derivatives of (p-Wasserstein distance)**p are calculated with respect to the UNORMALISED elements of f.
-#
-# Note: the Wasserstein distance is defined as 1/p pth power of the output, which only affects the W2 value
-#
-# Routine only works when there are no identical values in source and target CDFs. Typically this is achieved
-# by adding a perturbation to either source or target PDf values.
-#
-    fx = source.x
-    cf = source.cdf*source.amp # recover unormalized source CDF
-    cf = source.cdf # recover unormalized source CDF
-    cf /=cf[-1]
-    gx = target.x
-    cg = target.cdf*target.amp # recover unormalized target CDF
-    cg = target.cdf # recover unormalized target CDF
-    cg /=cg[-1]
-    n = source.n
-    
-    if(checkCommonCDF):
-        cset = np.intersect1d(target.cdf[:-1],source.cdf[:-1])
-        if(len(cset) !=0):
-            if( not ignoreCommonCDFerror): raise TargetSourceCDFError(cset)
-
-    tk = np.sort(np.append(cf[:-1],cg))
-    tkarg = np.argsort(np.append(cf[:-1],cg))
-    indf = list(map(lambda x:bisect.bisect_left(cf,x) ,tk))
-    indg = list(map(lambda x:bisect.bisect_left(cg,x) ,tk))
-    xft = fx[indf]
-    xgt = gx[indg]
-    dtk = np.insert(tk[1:] - tk[:-1],0,tk[0])  # A*tk
-    dxft = np.abs(xft-xgt)
-
-    W1,dW1 = None,None
-    if(calcW1): 
-        W1 = np.dot(dxft,dtk)
-        dW1 = np.zeros(n)
-    W2,dW2 = None,None
-    if(calcW2):
-        dsqxft = np.multiply(dxft,dxft)
-        W2 = np.dot(dsqxft,dtk)
-        dW2 = np.zeros(n)
-
-    if(returnplan): 
-        dH = np.zeros((n,n,n))
-        H = np.zeros((source.n,target.n))
-        for j in range(len(dtk)):
-            H[indf[j],indg[j]] += dtk[j]        
-
-    for i in range(n):
-
-        b = np.zeros(n)
-        b[i:] = 1.
-        c = (b-cf)/source.amp
-        d = np.append(c[:-1],np.zeros(len(cg)))
-        difftk = d[tkarg]
-        diffdtk = np.insert(difftk[1:] - difftk[:-1],0,difftk[0])  # A*tk
-
-        if(calcW1):
-            dW1[i] = np.dot(dxft,diffdtk)
-        if(calcW2):
-            dW2[i] = np.dot(dsqxft,diffdtk)
-        if(returnplan): 
-            #dH[i][indf,indg] = diffdtk
-            for j in range(len(dtk)):
-                dH[i,indf[j],indg[j]] += diffdtk[j]
-                    
-    out = []
-    if(calcW1): out += [W1,dW1]
-    if(calcW2): out += [W2,dW2]
-    if(returnplan): out += [H,dH]
-    return out
 
 def distfunction(iarr,jarr,distfunction_args,proj=-1,deriv=False): # distance between all PDF source and target points is precomputed in A
     if(type(distfunction_args)is np.ndarray):
@@ -1008,9 +900,9 @@ def wasser_find_optplan(source,target,W,distfunc=None,args=None):
     return s, H # return W^p, Transport plan for source to target 
 
 def wasserPOT(source,target,distfunc='W2',returnplan=False,returndist=False,maxiters=100000): # only implemented for W1, W2 not W12
-    import ot as ot
-    # bin positions
-
+    if(noPOTlibrary):
+        #print('POT library not installed')
+        raise POTlibraryError
     if(isinstance(distfunc, str)):
         if(distfunc=='W2'): metric = 'sqeuclidean'
         elif (distfunc=='W1'):  metric = 'cityblock'
@@ -1118,6 +1010,9 @@ def Sinkhorn_MS(sou,tar,gamma=0.0005,maxiters = 5001,verbose=False):
 
 def sinkhornPOT(source,target,distfunc='W2',returnplan=False,gamma=0.0005,returndist=False): # only implemented for W1, W2 not W12
     #lambd = 2e-3
+    if(noPOTlibrary):
+        #print('POT library not installed')
+        raise POTlibraryError
     a = np.copy(source.pdf)
     b = np.copy(target.pdf)
 
@@ -1152,58 +1047,39 @@ def sinkhornPOT(source,target,distfunc='W2',returnplan=False,gamma=0.0005,return
     if(returndist): out +=[A]
         
     return out
-
-def MargWasserstein_orig(source,target,distfunc='W2',derivatives=False,verbose=False,memory=False):
-
-    if(source.type !='2D'): raise TargetSource2DShapeError
-    if(target.type !='2D'): raise TargetSource2DShapeError
-    if(type(distfunc) == str):
-        if(distfunc=='W12'): raise MarginalWassersteinError(mset='W12')
-
-    if(source.calcmarg): source.setMarginals() # calculate source marginal PDFs
-    if(target.calcmarg): target.setMarginals() # calculate target marginal PDFs
-                            
-    if(derivatives): 
-        dwp = np.zeros((source.nx,source.ny)) # define derivatives array
-    wp = 0.
-    Nproj = 2
-    
-    for i in range(2): # loop over marginals
-        
-        s = source.marg[i]
-        t = target.marg[i]
-        
-        wout = wasser(s,t,distfunc=distfunc,
-                      derivatives=derivatives,
-                      checkCommonCDF=True,memory=memory)
-        
-        wsqpd = wout[0] # place output of wasser in local variables
-
-        if(derivatives): 
-            wsqpd, dw = wout[0:2]
-            if(i==0):
-                dwp[:] += dw
-                dwg = wout[2]
-
-            else:
-                dwp.T[:] += dw
-        else:   
-            wsqpd = wout[0]
-            
-        wp += wsqpd # sum W^p from projections
-            
-        if(verbose): print('Projection ',i,' completed w =',np.sqrt(wsqpd),' theta ',source.angles[i]*180/np.pi)        #
-
-    out=[wp/Nproj] # return average W**p from projections
-    if(derivatives): 
-        dwp -= np.dot(dwp.reshape(source.n),source.pdf.reshape(source.n)) # calculate derivatives w.r.t. unormalised source PDF amplitudes
-        dwp /=source.amp
-        out +=[dwp/Nproj] # return derivatives of average W**p
-        out +=[dwg/Nproj] # return derivatives w.r.t time window position
-        #out +=[dwp.reshape((source.nx,source.ny))/Nproj] # return derivatives of average W**p
-    return out
     
 def MargWasserstein(source,target,distfunc='W2',derivatives=False,verbose=False,memory=False,returnmargW=False):
+    """
+       Calculates the Marginal Wasserstein distance for x and y marginals of source and target 2D PDFs. 
+    
+            Input:
+                source - OTpdf object; contains 2D source PDF [as ndarray with shape(source.nx,source.ny)]
+                target - OTpdf object; contains 2D target PDF [as ndarray with shape(target.nx,target.ny)]
+                distfunc - string or ndarray; determines p value for Wasserstein or array of supplied 
+                           distances for each pair of elements in source and target discretized PDF                
+                derivatives - logical; True to return vectors of derivatives of Wasserstein with 
+                                       respect to density amplitudes of 2D PDF
+                returnmargW - logical; True to perform calculations separately on each marginal; 
+                                       False then return average Wassersteins.
+                                      
+            Output:
+                out - List of Wassersetin distances and optionally derivatives, where:
+                    
+                0.5*(wx+wy) = out                                  : if derivatives==False; returnmargW==False
+                [0.5*(wx+wy),0.5*(dwxdu+dwydu),0.5*(dwxdt0)] = out : if derivatives==True; returnmargW==False
+                [wx,wy] = out                                      : if derivatives==False; returnmargW==True
+                [wx,wy,dwxdu,dwydu,dwxdx0] = out                   : if derivatives==True; returnmargW==True
+                
+            where,
+                wx = Wasserstein distance between X marginals
+                wy = Wasserstein distance between Y marginals
+                dwxdu = Derivatives of Wasserstein distance between X marginals w.r.t. 2D density amplitudes
+                dwydu = Derivatives of Wasserstein distance between Y marginals w.r.t. 2D density amplitudes
+                dwxdx0 = Derivative of Wasserstein distance between X marginals w.r.t. x co-ordinate of axis origin 
+                                        
+                Note that dwydx0 = dwxdy0 = 0.                       
+    
+    """
 
     if(source.type !='2D'): raise TargetSource2DShapeError
     if(target.type !='2D'): raise TargetSource2DShapeError
@@ -1274,6 +1150,37 @@ def MargWasserstein(source,target,distfunc='W2',derivatives=False,verbose=False,
     return out
     
 def SlicedWasserstein(source,target,Nproj,distfunc='W2',derivatives=False,returnplan=False,verbose=False,returnProjpoints=False,calcWplan=False,calcAvgW=True,origin=[0.5,0.5],memory=False): # Calculate sliced Wasserstein and transport plan from 2D OT from projection of Nproj 1-D solutions
+    """
+       Calculates the Sliced Wasserstein distance for projections of source and target 2D PDFs. 
+    
+            Input:
+                source - OTpdf object; contains 2D source PDF [as ndarray with shape(source.nx,source.ny)]
+                target - OTpdf object; contains 2D target PDF [as ndarray with shape(target.nx,target.ny)]
+                Nproj - Number of angular projections about middle of axes
+                distfunc - string or ndarray; determines p value for Wasserstein or array of supplied 
+                           distances for each pair of elements in source and target discretized PDF                
+                derivatives - logical; True to return vectors of derivatives of Wasserstein with 
+                                       respect to density amplitudes of 2D PDF
+                returnplan - logical; True to return average Transport plan over slices.
+                                      
+            Output:
+                out - List of Wassersetin distances, Transport plan and derivatives, where:
+                    
+                [wsliced] = out                : if derivatives==False; returnplan==False
+                [wsliced,H] = out              : if derivatives==False; returnplan==True
+                [wsliced,dwsliced] = out       : if derivatives==True; returnplan==False
+                [wsliced,dwsliced,H,dH] = out  : if derivatives==True; returnplan==True
+                
+            where,
+                wsliced  = float; Sliced Wasserstein distance [=sum(w_i)/Nproj, (i=1,...,Nproj)]
+                wi       = Wasserstein distance between i-th projection of source and target (i=1,...,Nproj)
+                H        = ndarray, shape(source.nx*source.ny,target.nx*target.ny); Transport plan Matrix
+                dwsliced = ndarray; shape(source.nx,source.ny); Derivatives of Sliced Wasserstein 
+                           distance w.r.t. 2D source density amplitudes 
+                dH       = ndarray, shape(source.nx*source.ny,target.nx*target.ny,target.nx*target.ny); 
+                           Derivative of Wasserstein distance between X marginals w.r.t. x co-ordinate of axis origin 
+                                            
+    """
     
     # This code needs to be organized so that we only calculate the transport plan if it is requested to be returned. Not is calcWplan is True. Thsi is not needed and very expensive!
 
@@ -1310,7 +1217,7 @@ def SlicedWasserstein(source,target,Nproj,distfunc='W2',derivatives=False,return
             
     if(calcWplan or returnplan): Hgp = np.zeros((source.n,target.n)) # define optimal plan array
     if(derivatives): 
-        if(calcWplan):
+        if(calcWplan or returnplan):
             dHgp = np.zeros((source.n,source.n,target.n)) # define optimal plan array
             dHgpdummy = np.zeros((source.n,source.n,target.n)) # define optimal plan array
         dwp = np.zeros((source.n)) # define derivative
@@ -1423,7 +1330,6 @@ def plot_optimal_transform_frames(source,target,frames,plotsum=False): # plots f
     gx = target.x
     
     w1,w2 = wasser(source,target,'W12') # calculate Wasserstein 1 and 2 distances
-    #s1,H1,T1f2g,s2,H2,T2f2g = wasser_find_optplan_orig(source,target,w1,w2) # calculate optimal plan from Wassertein distance
     s1,H1,T1f2g = wasser_find_optplan(source,target,w1,distfunc='W1') # calculate optimal plan from Wassertein distance
     s2,H2,T2f2g = wasser_find_optplan(source,target,w2,distfunc='W2') # calculate optimal plan from Wassertein distance
     tf = np.zeros((len(f)+1,len(f)))
@@ -1591,7 +1497,6 @@ if __name__ == "__main__":
     if (plot): plotWasser(xp,Fp,Gp,t,IF,IG,x,IGF,xmIFGsq,iFGdiff)
 
     
-    #W1est,W2est = wasserNumInt_orig(f,g,fx,gx)
     W1est,W2est = wasserNumInt(source,target)
     print(' my W1 distance from f to g by numerical integration along t',W1est)
     print(' my W2 distance from f to g by numerical integration along t',W2est)
@@ -1610,7 +1515,6 @@ if __name__ == "__main__":
 # This method assumes the data domain is (0,1) and hence regular separation is dx = 1/(n-1)
 # need to convert to domain (0,(n-1)dx)
     if(len(f)==len(g)):
-        #mapping,cost = _optimaltransport_orig(f, g)
         mapping,cost = _optimaltransport(source,target)
         W2monge = float(cost)*((n-1)*dx)**2
         print(' W2 from Solution of Monge-Ampere optimal transport equation',W2monge)

@@ -13,13 +13,18 @@
 #
 import numpy as np
 import pylab as plt
-import skfmm
 from matplotlib import cm
 from matplotlib.colors import LightSource
 from mpl_toolkits.mplot3d import Axes3D
 from sklearn.neighbors import NearestNeighbors
 import time
-#from scipy.spatial.distance import cdist
+
+try:
+    import skfmm # import Fast Marching library https://pypi.org/project/scikit-fmm/
+    noFMMlibrary = False
+except ImportError:
+    noFMMlibrary = True
+
 
 class Error(Exception):
     """Base class for other exceptions"""
@@ -34,6 +39,11 @@ class FingerprintMethodError(Exception):
     """Raised when WaveformFP.calcpdf is called with invalid method string """
     def __init__(self,msg=''):
         super().__init__('\n Method not recognized by WaveformFP.calcpdf \n')
+
+class FMMlibraryError(Exception):
+    """Raised when FMM library is not installed"""
+    def __init__(self,msg=''):
+        super().__init__('\n scikit-fmm library is not installed. see https://pypi.org/project/scikit-fmm/\n')
 
 class waveformFP(object): # Waveform object for waveform fingerprint calculations
     '''
@@ -113,8 +123,8 @@ class waveformFP(object): # Waveform object for waveform fingerprint calculation
         if(lambdav is not None): lambdav = 0.04
         self.lam = lambdav
         if(method =='FMM' or method=='fmm'): # calculate nearest distance from waveform to each point on the grid using FMM
-           #Xn, Yn = np.meshgrid(np.linspace(self.tlimn[0],self.tlimn[1],self.ntg), np.linspace(0.,1.,self.nug))
-         # this looks like it has an ERROR Y should be Yn ? 
+            if(noFMMlibrary):
+                raise FMMlibraryError
             Xn, Yn = np.meshgrid(np.linspace(self.tlimfp[0],self.tlimfp[1],self.ntg), np.linspace(self.ulimfp[0],self.ulimfp[1],self.nug))   # 2D mesh in un-normalized co-ordinates
             t0 = time.time()
             phi = -np.ones((self.nug,self.ntg))
@@ -552,44 +562,6 @@ def check_FDderiv(wf,k,du=0.001,verbose=False): # finite difference test routine
     #return dddy0fd,dddy1fd,iraysp0[k],iraysm0[k],iraysp1[k],iraysm1[k]
     return i,dddy0fd,dddy1fd
 
-def check_FDchain_orig(wf,deriv,lambdav,dufd=0.0001): # Finite difference derivatives of sum of PDFs wrt waveform amplitude
-    
-    t = wf.p.T[0]
-    RF = wf.p.T[1]
-    u0 = wf.ulim[0]
-    u1 = wf.ulim[1]
-    t0 = wf.tlim[0]
-    t1 = wf.tlim[1]
-    nug = wf.nug
-
-    Xn, Yn = np.meshgrid(np.linspace(wf.tlimnfp[0],wf.tlimnfp[1],wf.ntg), np.linspace(wf.ulimnfp[0],wf.ulimnfp[1],wf.nug))
-    points = np.vstack((Xn.flatten(),Yn.flatten())).T
-
-    print('Calculating finite difference derivatives of sum of PDF amplitude')
-    for i in range(wf.nt):  # compare derivatives to finite difference. 
-
-        RFp = np.copy(RF)
-        RFp[i]+=dufd # pertub waveform +ve
-        wfp = waveformFP(t,RFp,(t0,t1,u0,u1,nug,wf.ntg))
-        
-        dp,iraysp0,xraysp,lraysp = wavedistv(points,wfp) # calculate distance field and rays for all grid points in normailized co-ordinates
-
-        PDFdp = np.exp(-np.abs(dp)/lambdav) # calculate PDF from distance function
-        sp = np.sum(PDFdp)
-    
-        RFm = np.copy(RF)
-        RFm[i]-=dufd # pertub waveform +ve
-        wfm = waveformFP(t,RFm,(t0,t1,u0,u1,nug,wf.ntg))
-    
-        dm,iraysm0,xraysm,lraysm = wavedistv(points,wfm) # calculate distance field and rays for all grid points in normailized co-ordinates
-
-        PDFdm = np.exp(-np.abs(dm)/lambdav) # calculate PDF from distance function
-        sm = np.sum(PDFdm)
-   
-        dsdyfd = (sp-sm)/(2*dufd)
-        print(i,' : ',dsdyfd,deriv[i])
-    return
-
 def check_FDchain(wf,lambdav,dufd=0.0001): # Finite difference derivatives of sum of PDFs wrt waveform amplitude
     
     t = wf.p.T[0]
@@ -910,8 +882,11 @@ def find_raystart_point_with_gradient(d,deltax): # failed attempt to locate ray 
 #-----------------------------------------------------------------
 
 if __name__ == "__main__":
-    import rf
-
+    try:
+        import rf
+        rfused = True
+    except ImportError:
+        rfused = False
     # Set up Vs seismic model
     vtype = 2 # format for velocitry model
     velmod = np.zeros([13,3]) # Set up a velocity reference model in Interface depth format
@@ -941,9 +916,13 @@ if __name__ == "__main__":
 # calculate RF waveforms
 #                                                   Note after restart of kernel the default observed is called `obsx' in Figures
 
-    time1, RFo = rf.rfcalc(velmod,sn=0.25,mtype=vtype,seed=61254557) # calculate noisy `observed' RF waveform
-    time2, RFp = rf.rfcalc(velmod,mtype=vtype)         # calculate noiseless `predicted' RF waveform
-
+    if(rfused):
+        time1, RFo = rf.rfcalc(velmod,sn=0.25,mtype=vtype,seed=61254557) # calculate noisy `observed' RF waveform
+        time2, RFp = rf.rfcalc(velmod,mtype=vtype)         # calculate noiseless `predicted' RF waveform
+    else:
+        time1 = np.linspace(0.,1.,626)
+        RFo = 2*np.sin(time1*6*np.pi)-3*np.cos((2*time1+0.30)*2*np.pi)
+        +4*np.sin((time1/5)*2*np.pi)
     #RF,t = RFo[::100],  time1[::100] # smallest test problem
     RF,t = RFo,time1                 # Full problem
     RF,t = RFo[::10],  time1[::10]   # smaller test problem
@@ -984,6 +963,7 @@ if __name__ == "__main__":
     time0 = time.time()
 
     if(fmm): # calculate nearest distance from waveform to each point on the grid using FMM
+        if(noFMMlibrary): raise FMMlibraryError
         phi = -np.ones_like(X) # create function with waveform as zero contour for input to FMM
         RFi = np.interp(np.linspace(t[0],t[-1],Nt), t, RF)
         phi[Y > RFi] = 1  # Set all points above waveform to 1. This only works if waveform has same dimension as grid.
