@@ -35,7 +35,7 @@ def ricker(f, length=0.128, dt=0.001,deriv=False):
 #      amp  : Amplitude factor so that the maximum amplitude peak as at amp
 #      f    : Dominant frequency factor
 
-def rickerwavelet(tpert,amp,f, trange=[-2.,2.],sigma_amp=0.,sigma_cor=0.,deriv=False,seed=0.):
+def rickerwavelet(tpert,amp,f, trange=[-2.,2.],sigma_amp=0.,sigma_cor=0.,deriv=False,seed=0.,removejitter=True):
     '''
     
         Create a double Ricker wavelet
@@ -66,7 +66,7 @@ def rickerwavelet(tpert,amp,f, trange=[-2.,2.],sigma_amp=0.,sigma_cor=0.,deriv=F
     if(seed != 0.):
         np.random.seed(seed)
     wpn = wp + 0.001*np.max(wp)*np.random.rand(len(wp))
-    #wpn = wp 
+    if(removejitter): wpn = wp 
     tp = np.linspace(trange[0],trange[1],len(wpn)) # define time axis in trange
     #Nt = len(wp)
 
@@ -523,6 +523,10 @@ def plotMarginals(wfwave,wf,tag='_',fxsize=None,fysize=None):
     return
 
 def check_dwduFD(i,t,RF,dufd,grid,lambdav,wfobs_target,transform=False):
+    '''
+            Calculate derivatives of Wasserstein distance between time and amplitude marginals 
+            with respect to waveform amplitudes by finite difference
+    '''
     RFp = np.copy(RF)
     dufdu = dufd*RF[i]/100.
     RFp[i]+=dufdu # pertub waveform +ve
@@ -538,6 +542,43 @@ def check_dwduFD(i,t,RF,dufd,grid,lambdav,wfobs_target,transform=False):
     dwudufd = (w2up-w2un)/(2*dufdu)
     return dwtdufd,dwudufd
 
+# Finite difference of derivatives of W2 with respect to model parameters
+def check_dwdmFD(k,tpred,wpred,dm,mref,grid,lambdav,wfobs_target,trange,transform=False,returnmarg=True):
+    '''
+            Calculate derivatives of Wasserstein distance between time and amplitude marginals 
+            with respect ricker model parameters by finite difference
+    '''
+    #wfs,wfsource = ru.BuildOTobjfromWaveform(tpred,wpred,grid,lambdav=lambdav,deriv=True)
+    #w2,dr,dg = ru.CalcWasserWaveform(wfsource,wfobs_target,wfs,distfunc='W2',deriv=True)
+    # chain rule for dw/dm
+    #deriv = dw.dot(dr)
+    #deriv[0] = dg # derivative of W_p wrt to window position along time axis.
+
+    m = np.copy(mref)
+    m[k] += dm
+    if(returnmarg):
+        tpos,wpos = rickerwavelet(m[0],m[1],m[2],trange=trange)                  # model parameters to ricker wavelets
+        wfsp,wfsourcep = BuildOTobjfromWaveform(tpos,wpos,grid,lambdav=lambdav)  # ricker wavelets to PDF of fingerprint
+        w2tp,w2up = CalcWasserWaveform(wfsourcep,wfobs_target,wfsp,distfunc='W2',returnmarg=True)[0] # PDF of fringerprints to Wasserstein distances  
+        m = np.copy(mref)
+        m[k] -= dm
+        tneg,wneg = rickerwavelet(m[0],m[1],m[2],trange=trange)                  # model parameters to ricker wavelets
+        wfsn,wfsourcen = BuildOTobjfromWaveform(tneg,wneg,grid,lambdav=lambdav)  # ricker wavelets to PDF of fingerprint
+        w2tn,w2un = CalcWasserWaveform(wfsourcen,wfobs_target,wfsn,distfunc='W2',returnmarg=True)[0] # PDF of fringerprints to Wasserstein distances    
+        fd0t = (w2tp-w2tn)/(2*dm)
+        fd0u = (w2up-w2un)/(2*dm)
+        return fd0t,fd0u
+    else:
+        tpos,wpos = rickerwavelet(m[0],m[1],m[2],trange=trange)                  # model parameters to ricker wavelets
+        wfsp,wfsourcep = BuildOTobjfromWaveform(tpos,wpos,grid,lambdav=lambdav)  # ricker wavelets to PDF of fingerprint
+        w2p = CalcWasserWaveform(wfsourcep,wfobs_target,wfsp,distfunc='W2') # PDF of fringerprints to Wasserstein distances  
+        m = np.copy(mref)
+        m[k] -= dm
+        tneg,wneg = rickerwavelet(m[0],m[1],m[2],trange=trange)                  # model parameters to ricker wavelets
+        wfsn,wfsourcen = BuildOTobjfromWaveform(tneg,wneg,grid,lambdav=lambdav)  # ricker wavelets to PDF of fingerprint
+        w2n = CalcWasserWaveform(wfsourcen,wfobs_target,wfsn,distfunc='W2') # PDF of fringerprints to Wasserstein distances    
+        fd0 = (w2p-w2n)/(2*dm)
+        return fd0
 
 
 
