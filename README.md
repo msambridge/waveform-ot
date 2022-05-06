@@ -24,14 +24,12 @@ The current package demonstrates the following calculations:
 
 
 ## Package contents
-To access core functionality, import `OTlib` and `FingerprintLib` within your Python code. This
-provides access to the following:
 
-- A class for specifying a seismic Fingerprint, `waveformFP`;
-- A class for specifying a 1D of 2D density function suitable for use with OT calculation library, `OTpdf`;
-- Several routines to operate on these classes to calculate Wasserstein distance between 1D or 2D PDFs as well as calculate derivatives with respect to the amplitude of 1D or 2D densities, and in turn to time series amplitudes. 
+The core computational routines of this package are found in two Python modules, both found in the `libs` directory:
+- `FingerprintLib` - Routines to calculate time series fingerprints, including a class `waveformFP`;
+- `OTlib`  - Routines to undertake Optimal Transport calculations between fingerprints, including a class `OTpdf`.
 
-Calculations in the paper are demonstrated through a series of Jupyter notebooks demonstrating:
+Calculations in the paper are demonstrated through a series of Jupyter notebooks:
 - Calculation of Wasserstein distances between PDFs represented as a finite sum of point masses in 1D.
 - Fitting of a noisy double Ricker wavelet by minimization of L2 and Wasserstein misfits.
 - Fitting of 33 noisy displacement seismograms for seismic source parameters by minimization of L2 and Wasserstein misfits.
@@ -50,7 +48,7 @@ If you make use of this code, please acknowledge the work that went into develop
 - [Sambridge, M., Jackson, A., & Valentine, A. P. (2022)](https://academic.oup.com/gji/advance-article-abstract/doi/10.1093/gji/ggac151/6572363) "Geophysical Inversion and Optimal Transport", Geophysical Journal International, *in press*.
 
 
-An appropriate form of words might be, "We make use of the software package `OTlib.py` (REF tbc), which is based on the approach of Sambridge, M., Jackson, A., & Valentine, A. P. (2022)."
+An appropriate form of words might be, "We make use of the software package `OTlib.py`, which implements the approach of Sambridge, M., Jackson, A., & Valentine, A. P. (2022)."
 
 ## Acknowledgements
 
