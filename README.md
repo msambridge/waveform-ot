@@ -35,8 +35,6 @@ Calculations in the paper are demonstrated through a series of Jupyter notebooks
 - Fitting of 33 noisy displacement seismograms for seismic source parameters by minimization of L2 and Wasserstein misfits.
 - Calculation of derivatves of Wasserstein distances with respect to time series amplitudes.
 
-Each jupyter notebook may be found in a separate directory and all rely on the library `OTlib.py`.
-
 ### Seismogram software `pyprop8`
 
 This notebook makes use of Andrew Valentine's `pyprop8` implementation of the seismogram calculation algorithm set out in [O'Toole & Woodhouse (2011)](https://doi.org/10.1111/j.1365-246X.2011.05210.x), together with the source derivatives set out in [O'Toole, Valentine & Woodhouse (2012)](https://doi.org/10.1111/j.1365-246X.2012.05608.x). To run this notebook this package
