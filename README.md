@@ -10,16 +10,7 @@ This package implements various algorithms described in [Sambridge, Jackson & Va
 - [Acknowledgements](#acknowledgements)
 
 ## Introduction
-The current package demonstrates the following calculations:
-
-- Computation of time series *Fingerprints* as a 2D density field representation of a time series suitable for use with Optimal Transport;
-- Computation of 1D time and amplitude marginals from the 2D density field;
-- Calculation of Wasserstein distances between observed and predicted  time and amplitude marginals using formulae in Sambridge et al. (2022);
-- Calculation of derivatives of Wasserstein distances with respect to time series amplitudes;
-- Optimal Transport calculations for a set of point masses in 1D;
-- Optimisation of Wasserstein misfits to fit noisy Double Ricker wavelets as a function of three parameters;
-- Optimisation of Wasserstein misfits to fit noisy seismic displacement waveforms (produced by package [pyprop8](https://github.com/valentineap/pyprop8)) based on a 1D seismic velocity model.
-
+The current package demonstrates python software to calculate Wasserstein distances between 1D oscillatory time series, as well as the derivatives of those misfit measures with respect to the amplitude and origin time of the time series.
 
 ## Package contents
 
@@ -31,17 +22,12 @@ The core computational routines of this package are found in two Python modules,
 The `libs` directory contains several additional modules: these provide various functions that are specific to the examples presented here.
 
 Calculations in the paper are demonstrated through a sequence of Jupyter notebooks:
-- `Ricker_Figs_1_7.ipynb`: Add a description here.
-- `Ricker_Figs_3_8.ipynb`: Add a description here.
-- `Ricker_waveform_derivatives.ipynb`: Add a description here.
-- `source_location_cmt_W2L2.ipynb`: Add a description here.
-- `source_location_cmt_W2L2_Figs_9_10_11.ipynb`: Add a description here.
-- `source_location_cmt_W2L2_Fig_12.ipynb`: Add a description here.
-
-<!-- - Calculation of Wasserstein distances between PDFs represented as a finite sum of point masses in 1D.
-- Fitting of a noisy double Ricker wavelet by minimization of L2 and Wasserstein misfits.
-- Fitting of 33 noisy displacement seismograms for seismic source parameters by minimization of L2 and Wasserstein misfits.
-- Calculation of derivatves of Wasserstein distances with respect to time series amplitudes. -->
+- `Point_mass_demo_Fig_5.ipynb`: An illustration of use of the OT library to calculate Wasserstein misfit between two 1D density functions. Also shows the intermediate steps in calculations of the Wasserstein distance and reproduces Figure 5 of the paper.
+- `Ricker_Figs_1_7.ipynb`: Demonstrates calculation of a time series Fingerprint using a double Ricker wavelet example. Calculates Wasserstein misfit between noisy and noiseless waveforms as a function of the time shift and amplitude scale factor of the Ricker wavelets. Reproduces Figures 1 and 7 of the paper.
+- `Ricker_Figs_3_8.ipynb`: Demonstrates calculation of 1D time and amplitude marginals from 2D Fingerprint density field. Shows how to use Wasserstein misfit for optimisation of 3 parameters controlling Ricker wavelets. Reproduces Figures 3 and 8 of the paper. 
+- `Ricker_waveform_derivatives.ipynb`: Illustrates detailed calculation of derivatives of Wasserstein time and amplitude marginals with respect to waveform amplitudes and window origin time. Demonstrates application of chain rule to various intermediate derivatives as described in the paper. All calculations are generic except the final combination involving the forward problem model parameters. This notebook may be helpful in showing how to apply the libraries to other applications involving the fitting of time series.
+- `source_location_cmt_W2L2_Figs_9_10_11.ipynb`: Demonstrates application of Wasserstein library to earthquake source and moment tensor inversion using example in the paper. Reproduces Figures 9, 10 and 11.
+- `source_location_cmt_W2L2_Fig_12.ipynb`: Performs repeat inversions for earthquake source parameters starting from different source locations. Reproduces Figure 12 of the paper.
 
 ## Installation and usage
 
