@@ -152,9 +152,9 @@ def optfunc_L2(m_in,optdata,returnseis=False,returnseisd=False,noderiv=False,geo
         cmtd = True
 
     if(geometry=='cartesian'): # return source location derivatives in cartesian co-ordinates from pyprop8
-        drv = pp.DerivativeSwitches(x=invopt['loc'],y=invopt['loc'],depth=invopt['loc'],moment_tensor=cmtd,structure=prop8data['model']) # choose which derivatives to make
+        drv = pp.DerivativeSwitches(x=invopt['loc'],y=invopt['loc'],z=invopt['loc'],moment_tensor=cmtd,structure=prop8data['model']) # choose which derivatives to make
     else:                      # return source location derivatives in spherical co-ordinates from pyprop8
-        drv = pp.DerivativeSwitches(r=invopt['loc'],phi=invopt['loc'],depth=invopt['loc'],moment_tensor=cmtd,structure=prop8data['model']) # choose which derivatives to make
+        drv = pp.DerivativeSwitches(r=invopt['loc'],phi=invopt['loc'],z=invopt['loc'],moment_tensor=cmtd,structure=prop8data['model']) # choose which derivatives to make
 
     #print(m)
     t, seis_pred, deriv, sourceL, stations = prop8seis(x,y,z,prop8data,Mxyz=Mxyz,drv=drv,show_progress=False,returndata=True) # calculate displacement seismograms
@@ -218,9 +218,9 @@ def optfunc_OT(m_in,optdata,returnseis=False,returnwobj=False,returngrid=False,n
         cmtd = True
 
     if(geometry=='cartesian'): # return source location derivatives in cartesian co-ordinates from pyprop8
-        drv = pp.DerivativeSwitches(x=invopt['loc'],y=invopt['loc'],depth=invopt['loc'],moment_tensor=cmtd,structure=prop8data['model']) # choose which derivatives to make
+        drv = pp.DerivativeSwitches(x=invopt['loc'],y=invopt['loc'],z=invopt['loc'],moment_tensor=cmtd,structure=prop8data['model']) # choose which derivatives to make
     else:                      # return source location derivatives in spherical co-ordinates from pyprop8
-        drv = pp.DerivativeSwitches(r=invopt['loc'],phi=invopt['loc'],depth=invopt['loc'],moment_tensor=cmtd,structure=prop8data['model']) # choose which derivatives to make
+        drv = pp.DerivativeSwitches(r=invopt['loc'],phi=invopt['loc'],z=invopt['loc'],moment_tensor=cmtd,structure=prop8data['model']) # choose which derivatives to make
 
     #print(m)
     t, seis_pred, deriv, sourceL, stations = prop8seis(x,y,z,prop8data,Mxyz=Mxyz,drv=drv,show_progress=False,returndata=True) # calculate displacement seismograms
@@ -363,7 +363,7 @@ def drv_rpd2xyz(drv,deriv,stations,geometry='spherical'):
     if(geometry=='spherical'):
         dseisdr   = deriv[:,drv.i_r,:,:]   # derivative of seismograms wrt range of receiver from source, r
         dseisdp   = deriv[:,drv.i_phi,:,:] # derivative of seismograms wrt azimuth of receiver from source along x-axis ccw, phi.
-        dseisdd   = deriv[:,drv.i_dep,:,:] # derivative of seismograms wrt depth of receiver, z_r
+        dseisdd   = deriv[:,drv.i_z,:,:] # derivative of seismograms wrt depth of receiver, z_r
         # use chain rule to find derivatives of source location in Cartesian co-ordinates
         dseisdx = ((dseisdr.T)*(-np.cos(stations.pp)) + (dseisdp.T)*(np.sin(stations.pp)/stations.rr)).T # derivative of seismograms wrt x co-ordinate of source
         dseisdy = -((dseisdr.T)*(np.sin(stations.pp)) + (dseisdp.T)*(np.cos(stations.pp)/stations.rr)).T # derivative of seismograms wrt y co-ordinate of source
@@ -371,7 +371,7 @@ def drv_rpd2xyz(drv,deriv,stations,geometry='spherical'):
     else:
         dseisdx   = deriv[:,drv.i_x,:,:]   # derivative of seismograms wrt x-co-ordinate of source
         dseisdy   = deriv[:,drv.i_y,:,:]   # derivative of seismograms wrt y-co-ordinate of source
-        dseisdz   = -deriv[:,drv.i_dep,:,:] # derivative of seismograms wrt depth of receiver, z_r
+        dseisdz   = -deriv[:,drv.i_z,:,:] # derivative of seismograms wrt depth of receiver, z_r
     if(drv.moment_tensor):
         dseismt0   = deriv[:,drv.i_mt+diagorder[0],:,:]   # derivative of seismograms wrt moment tensor components       
         dseismt1   = deriv[:,drv.i_mt+diagorder[1],:,:] # derivative of seismograms wrt moment tensor components       
