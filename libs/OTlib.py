@@ -347,11 +347,13 @@ def _checkderivMarg(source,target,df,distfunc='W2',verbose=False,memory=False,pe
         setofindices = range(source.n)
     else:
         setofindices = ind
-
+        
+    donenowork = True
     if(returnmargW):  # perform finite difference comparison separately for each marginal
         for i in setofindices:
             if(percent): dfused = np.abs(f[i])*df/100.
             if(np.abs(f[i]) > dffloor): # do not do FD if amplitude too small
+                donenowork = False
                 fmin = np.copy(f)
                 fmin[i] = f[i] - dfused
                 sm = OTpdf((fmin.reshape((source.nx,source.ny)),fx)) # set up source object
@@ -373,6 +375,7 @@ def _checkderivMarg(source,target,df,distfunc='W2',verbose=False,memory=False,pe
         for i in setofindices:
             if(percent): dfused = np.abs(f[i])*df/100.
             if(np.abs(f[i]) > dffloor): # do not do FD if amplitude too small
+                donenowork = False
                 fmin = np.copy(f)
                 fmin[i] = f[i] - dfused
                 sm = OTpdf((fmin.reshape((source.nx,source.ny)),fx)) # set up source object
@@ -387,6 +390,7 @@ def _checkderivMarg(source,target,df,distfunc='W2',verbose=False,memory=False,pe
                     print(i, ' :     avg   ', dWm.flatten()[i], ' ', wfd)
                     #print(i, ' :     avg   ', dWm[i], ' ', wfd)
                 return wfd
+    if(donenowork): return None,None
             
 def _normalise(source, target): # Mike Snow's OT routines for discrete L2
     return np.divide(source, np.sum(source))

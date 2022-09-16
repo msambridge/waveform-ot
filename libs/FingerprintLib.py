@@ -50,7 +50,7 @@ class waveformFP(object): # Waveform object for waveform fingerprint calculation
     Object to encapsulate a seismic waveform and its nearest distance field (Fingerprint)
         
     '''
-    def __init__(self,t,w,grid,fpgrid=None):   # introduced a separate fingerprint box from non-dimensional transformation
+    def __init__(self,t,w,grid,fpgrid=None,theta=45.0,tantheta=1.0):   # introduced a separate fingerprint box from non-dimensional transformation
         '''
         Create a non-dimensionalized time amplitude window.
         
@@ -66,15 +66,29 @@ class waveformFP(object): # Waveform object for waveform fingerprint calculation
                 Nu = int, number of grid points along amplitude axis of window
                 Nt = int, len(wave); number of grid points along time axis of window
             fpgrid - option to impose a non unit transformed time-amplitude window. 
+            theta = float; angle in degrees for distance metric weighting between time and amplitude to calculate distance field. 
+            tantheta = float; tangent of angle in degrees for distance metric weighting between time and amplitude to calculate distance field. 
 
+        if tantheta option is set it takes precedence over theta option.
+        
         '''
         (t0,t1, u0,u1,nug,ntg) = grid # unit box in transformed co-ordinates
         
+        if(tantheta!=1.0): # if thatheta is set use that value for metric weighting rather than theta
+            theta = np.arctan(tantheta)*180./np.pi
+        elif(theta!=45.0):
+            tantheta = np.tan(np.pi*theta/180.0)
+        else:
+            tantheta = 1.0
+
         self.ntg = int(ntg)
         self.nug = int(nug)
         self.ulim = (u0,u1)
         self.tlim = (t0,t1)
-        self.tlimn = ((t[0]-t0)/(t1-t0),(t[-1]-t0)/(t1-t0))                # waveform time range in normalised co-ordinates
+        self.tant = tantheta
+        self.theta = theta
+        Delt = self.tant*(t1-t0)
+        self.tlimn = ((t[0]-t0)/Delt,(t[-1]-t0)/Delt)                # waveform time range in normalised co-ordinates
         self.ulimn = (0.,1.) # not correct if fpgrid is active and NEVER used here anyway
         self.nt = len(t)
 
@@ -88,12 +102,12 @@ class waveformFP(object): # Waveform object for waveform fingerprint calculation
             (fp_t0,fp_t1, fp_u0,fp_u1) = fpgrid[0:4] # fingerprint box differs from unit box in non-dimensional co-ordinates
             self.tlimfp  = (fp_t0,fp_t1)                               # fingerprint box in dimensional co-ordinates
             self.ulimfp  = (fp_u0,fp_u1)                               # fingerprint box in dimensional co-ordinates
-            self.tlimnfp = ((fp_t0-t0)/(t1-t0),(fp_t1-t0)/(t1-t0))     # fingerprint box in non-dimensional co-ordinates
+            self.tlimnfp = ((fp_t0-t0)/(Delt),(fp_t1-t0)/(Delt))     # fingerprint box in non-dimensional co-ordinates
             self.ulimnfp = ((fp_u0-u0)/(u1-u0),(fp_u1-u0)/(u1-u0))     # fingerprint box in non-dimensional co-ordinates
 
         self.delgrid = np.array([(self.ulimnfp[1]-self.ulimnfp[0])/self.nug,(self.tlimnfp[1]-self.tlimnfp[0])/self.ntg])
         self.p = np.array([t,w]).T                                         # co-ordinates of waveform points in un-normalised co-ordinates
-        self.pn = np.array([(t-t0)/(t1-t0),(w-u0)/(u1-u0)]).T              # co-ordinates of waveform points in normalised co-ordinates
+        self.pn = np.array([(t-t0)/(Delt),(w-u0)/(u1-u0)]).T              # co-ordinates of waveform points in normalised co-ordinates
         self.x0 = self.pn[:-1].reshape(1,self.nt-1,2)                      # co-ordinates of waveform segment start points in normalised co-ordinates
         self.delta_n = np.subtract(self.pn[1:], self.pn[:-1])              # vectors along waveform segments in normalised co-ordinates
         self.lsq_n = np.sum(np.multiply(self.delta_n,self.delta_n),axis=1) # waveform segment squared lengths in normalised co-ordinates
@@ -102,7 +116,7 @@ class waveformFP(object): # Waveform object for waveform fingerprint calculation
 
     def calcpdf(self,q=None,lambdav=0.04,deriv=False,method='Enumerate',verbose=False,nsegs=0):
         '''
-        Create a density field for input waveform and optinally 
+        Create a density field for input waveform and optionally 
         derivatives of density field with respect to waveform amplitudes
 
         Inputs: (All optional)
@@ -116,11 +130,11 @@ class waveformFP(object): # Waveform object for waveform fingerprint calculation
             
         Outputs: 
             .pdf - ndarray; shape(Nt,Nu); amplitudes of 2D density of nearest distance field from waveform.
-            .dfield - ndarray; shape(Nt,Nu); nearest distance field from waveform.
+            .dfield - ndarray; shape(Nt,Nu); nearest squared distance field from waveform.
 
         '''
 
-        if(lambdav is not None): lambdav = 0.04
+        #if(lambdav is not None): lambdav = 0.04 # This looks to overide all lambda settings and should not be here
         self.lam = lambdav
         if(method =='FMM' or method=='fmm'): # calculate nearest distance from waveform to each point on the grid using FMM
             if(noFMMlibrary):
@@ -131,7 +145,7 @@ class waveformFP(object): # Waveform object for waveform fingerprint calculation
             RFi = np.interp(np.linspace(self.tlimfp[0],self.tlimfp[1],self.ntg), self.p.T[0], self.p.T[1])
             # shouldn't this by Yn rather than Y, or rather Xn,Yn above should be X,Y?
             phi[Yn > RFi] = 1  # create function with waveform as zero contour for input to FMM
-            self.dfield = skfmm.distance(phi, dx=self.delgrid) # evaluate signed distance function
+            self.dfield = skfmm.distance(phi, dx=self.delgrid) # evaluate signed distance function IS self.delgrid the wrong way around here?
             self.dfield = np.abs(self.dfield) # Remove sign of distance field produced by FMM
             twd = time.time()-t0
             self.type = 'FMM'
@@ -222,7 +236,7 @@ class waveformFP(object): # Waveform object for waveform fingerprint calculation
             
         Outputs
             .dfield - ndarray; shape(Nt,Nu) containing the nearest distance field.
-                                Each point in nearest distance filed corresponds to a single point on the waveform.
+                                Each point in nearest distance field corresponds to a single point on the waveform.
             .irays - integer array; shape()
 
         '''
@@ -237,8 +251,6 @@ class waveformFP(object): # Waveform object for waveform fingerprint calculation
         Lsq = self.lsq_n # waveform segment squared lengths in normalised co-ordinates
         # waveforms have local time range but common amplitude range 
 
-        #Xn, Yn = np.meshgrid(np.linspace(0.,1.,self.ntg), np.linspace(0.,1.,self.nug))
-        #Xn, Yn = np.meshgrid(np.linspace(self.tlimn[0],self.tlimn[1],self.ntg), np.linspace(0.,1.,self.nug)) # grid in normalised co-ordinates
         Xn, Yn = np.meshgrid(np.linspace(self.tlimnfp[0],self.tlimnfp[1],self.ntg), np.linspace(self.ulimnfp[0],self.ulimnfp[1],self.nug))
         p = (np.vstack((Xn.flatten(),Yn.flatten())).T).reshape(-1,1,2)
         b = p - x0
@@ -266,7 +278,6 @@ class waveformFP(object): # Waveform object for waveform fingerprint calculation
         Lsq = self.lsq_n # waveform segment squared lengths in normalised co-ordinates
         # waveforms have local time range but common amplitude range 
 
-        #Xn, Yn = np.meshgrid(np.linspace(self.tlimn[0],self.tlimn[1],self.ntg), np.linspace(0.,1.,self.nug)) # grid in normalised co-ordinates
         Xn, Yn = np.meshgrid(np.linspace(self.tlimnfp[0],self.tlimnfp[1],self.ntg), np.linspace(self.ulimnfp[0],self.ulimnfp[1],self.nug)) # grid in normalised co-ordinates
         p = np.vstack((Xn.flatten(),Yn.flatten())).T
 
@@ -336,8 +347,6 @@ class waveformFP(object): # Waveform object for waveform fingerprint calculation
             raise WaveformPFderivError
         
         dis = self.dfield.reshape(-1,1)
-        #Xn, Yn = np.meshgrid(np.linspace(0.,1.,self.ntg), np.linspace(0.,1.,self.nug))
-        #Xn, Yn = np.meshgrid(np.linspace(self.tlimn[0],self.tlimn[1],self.ntg), np.linspace(0.,1.,self.nug))
         Xn, Yn = np.meshgrid(np.linspace(self.tlimnfp[0],self.tlimnfp[1],self.ntg), np.linspace(self.ulimnfp[0],self.ulimnfp[1],self.nug))
         p = np.vstack((Xn.flatten(),Yn.flatten())).T
         dx0dy0 = np.array([0., 1.])
@@ -376,7 +385,6 @@ class waveformFP(object): # Waveform object for waveform fingerprint calculation
             self.dddy = np.vstack((dddy0,dddy1)).T
 
 def NNsearch(wf,ni=0): # calculates irays,lrays,xrays and dfield to segment using NN search plus vectorised calculations on segment pairs.
-    #Xn, Yn = np.meshgrid(np.linspace(wf.tlimn[0],wf.tlimn[1],wf.ntg), np.linspace(wf.ulimn[0],wf.ulimn[1],wf.nug))   # 2D mesh in normalized co-ordinates
     Xn, Yn = np.meshgrid(np.linspace(wf.tlimnfp[0],wf.tlimnfp[1],wf.ntg), np.linspace(wf.ulimnfp[0],wf.ulimnfp[1],wf.nug))   # 2D mesh in normalized co-ordinates
     points = np.vstack((Xn.flatten(),Yn.flatten())).T # build grid points
     if(ni!=0):
@@ -507,6 +515,7 @@ def wavederiv(d,irays,xrays,lrays,points,wf,verbose=False): # calculate derivati
 
 def check_FDderiv(wf,k,du=0.001,verbose=False): # finite difference test routine for derivatives of distance filed wrt waveform amplitudes.
  # accuracy problems can occur with this finite difference routine if pertubations of waveform amplitudes change which segement is the closest to grid point   
+    tantheta = wf.tant
     t = wf.p.T[0]
     RF = wf.p.T[1]
     u0,u1 = wf.ulim
@@ -522,13 +531,13 @@ def check_FDderiv(wf,k,du=0.001,verbose=False): # finite difference test routine
 
     RFp = np.copy(RF)
     RFp[i]+=dups # pertub waveform +ve
-    wfp = waveformFP(t,RFp,(t0,t1,u0,u1,nug,wf.ntg))
+    wfp = waveformFP(t,RFp,(t0,t1,u0,u1,nug,wf.ntg),tantheta=tantheta)
         
     dp,iraysp0,xraysp,lraysp = wavedistv(points,wfp) # calculate distance field and rays for all grid points in normailized co-ordinates
     
     RFm = np.copy(RF)
     RFm[i]-=dups # pertub waveform +ve
-    wfm = waveformFP(t,RFm,(t0,t1,u0,u1,nug,wf.ntg))
+    wfm = waveformFP(t,RFm,(t0,t1,u0,u1,nug,wf.ntg),tantheta=tantheta)
     
     dm,iraysm0,xraysm,lraysm = wavedistv(points,wfm) # calculate distance field and rays for all grid points in normailized co-ordinates
     
@@ -538,13 +547,13 @@ def check_FDderiv(wf,k,du=0.001,verbose=False): # finite difference test routine
     
     RFp = np.copy(RF)
     RFp[i+1]+=dups # pertub waveform +ve
-    wfp = waveformFP(t,RFp,(t0,t1,u0,u1,nug,wf.ntg))
+    wfp = waveformFP(t,RFp,(t0,t1,u0,u1,nug,wf.ntg),tantheta=tantheta)
         
     dp,iraysp1,xraysp,lraysp = wavedistv(points,wfp) # calculate distance field and rays for all grid points in normailized co-ordinates
     
     RFm = np.copy(RF)
     RFm[i+1]-=dups # pertub waveform +ve
-    wfm = waveformFP(t,RFm,(t0,t1,u0,u1,nug,wf.ntg))
+    wfm = waveformFP(t,RFm,(t0,t1,u0,u1,nug,wf.ntg),tantheta=tantheta)
     
     dm,iraysm1,xraysm,lraysm = wavedistv(points,wfm) # calculate distance field and rays for all grid points in normailized co-ordinates
     

@@ -250,7 +250,7 @@ def optfunc_OT(m_in,optdata,returnseis=False,returnwobj=False,returngrid=False,n
     fpgrid=None
     un,dundu = arctan_trans(seis_pred,obs_grids,deriv=True)
             
-    wfp, wfpred_source = BuildOTobjfromWaveform(t,seis_pred,obs_grids,OTdata,lambdav=OTdata['plambda'],deriv=True,fpgrid=fpgrid) # Calculate fingerprints for each predicted waveform
+    wfp, wfpred_source = BuildOTobjfromWaveform(t,seis_pred,obs_grids,OTdata,lambdav=OTdata['plambda'],deriv=True,fpgrid=fpgrid,theta=OTdata['theta']) # Calculate fingerprints for each predicted waveform
 
     if(returnmarg):
         for i in range(nr): # loop over receivers
@@ -445,7 +445,7 @@ def buildFingerprintwindows(t,wave,Nu=None,Nt=None,u0=None,u1=None):
             grid[i][j] = [t0,t1,u0out,u1out,Nu_used,Nt_used]
     return grid    
 
-def BuildOTobjfromWaveform(t,wavein,gridin,OTdata,norm=False,verbose=False,lambdav=None,deriv=False,fpgrid=None):
+def BuildOTobjfromWaveform(t,wavein,gridin,OTdata,norm=False,verbose=False,lambdav=None,deriv=False,fpgrid=None,theta=45.0):
     '''
         Create two objects:
             - A fingerprint object containing the input time series, window parameters and its nearest distance density field.
@@ -505,11 +505,11 @@ def BuildOTobjfromWaveform(t,wavein,gridin,OTdata,norm=False,verbose=False,lambd
             #print(u0,Nu)
             if(fpgrid is not None): fpgridu = fpgridused[i][j]
             ta = timer.time()
-            wf = fp.waveformFP(t,u[i][j],grid[i][j],fpgrid=fpgridu) # create Fingerprint waveform object
+            wf = fp.waveformFP(t,u[i][j],grid[i][j],fpgrid=fpgridu,theta=theta) # create Fingerprint waveform object
             twf += timer.time() - ta
             ta = timer.time()
             if(lambdav is None ): # Calculate PDF of distance field using default spatial scaling
-                wf.calcpdf(deriv=deriv,q=q) # default value of lamba is 0.04
+                wf.calcpdf(deriv=deriv,q=q) # default value of lambda is 0.04
             else:                 # Calculate PDF of distance field using imposed spatial scaling
                 wf.calcpdf(lambdav=lambdav,deriv=deriv,q=q)
             wflist[i][j] = wf # create list of Fingerprint waveform objects

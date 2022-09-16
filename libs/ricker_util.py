@@ -6,7 +6,7 @@ Created on Wed Apr 13 12:52:30 2022
 @author: Malcolm Sambridge
 """
 import numpy as np
-from . import myGP as gp               # Routines to calculate Gaussian processes used to generate correlated noisy time series.
+from . import myGP as gp       # Routines to calculate Gaussian processes used to generate correlated noisy time series.
 from scipy import interpolate
 import matplotlib.pyplot as plt
 from matplotlib import cm
@@ -201,7 +201,7 @@ def plotsurface(source,x,y,xtrue,ytrue,xlab='x',ylab='y',lw=1.0,base=False,
     
 # routine to build OT objects from a waveform using a fixed window
 # This is used in the ricker wavlet fitting example
-def BuildOTobjfromWaveform(t,wave,grid,norm=False,verbose=False,lambdav=None,deriv=False,transform=False):
+def BuildOTobjfromWaveform(t,wave,grid,norm=False,verbose=False,lambdav=None,deriv=False,transform=False,theta=45.0):
     '''
         Create two objects:
             - A fingerprint object containing the input time series, window parameters and its nearest distance density field.
@@ -223,6 +223,8 @@ def BuildOTobjfromWaveform(t,wave,grid,norm=False,verbose=False,lambdav=None,der
             lambdav - float: the distance scaling parameter used in the density field estimation.
             deriv - logical; switch to calculate and derivatives of the 2D density field with respect to the waveform amplitudes and return as a parameter of the class object.
             transform - logical; switch to turn on transform of amplitudes using inverse arctan.
+            theta = float; angle in degrees for distance metric weighting between time and amplitude to calculate distance field. 
+            
         Outputs:
             wf - Fingerprint class object; 
             OT.OTpdf - Optimal Transport probability density function object for 2D density field.
@@ -244,7 +246,10 @@ def BuildOTobjfromWaveform(t,wave,grid,norm=False,verbose=False,lambdav=None,der
         (t0,t1,u0,u1,Nu,Nt) = grid
 
     ta = timer.time()
-    wf = fp.waveformFP(t,wave,(t0,t1,u0,u1,Nu,Nt)) # create Fingerprint waveform object
+    if(theta==45.0):
+        wf = fp.waveformFP(t,wave,(t0,t1,u0,u1,Nu,Nt)) # create Fingerprint waveform object
+    else:
+        wf = fp.waveformFP(t,wave,(t0,t1,u0,u1,Nu,Nt),theta=theta) # create Fingerprint waveform object
     tb = timer.time() - ta
     ta = timer.time()
     if(lambdav is None ): # Calculate PDF of distance field using default spatial scaling
@@ -325,10 +330,11 @@ def CalcWasserWaveform(wfsource,wftarget,wf,distfunc='W2',deriv=False,returnmarg
     if(deriv): 
         if(returnmarg):
             wf.PDFderivMarg(dw)  # get derivative of W marginals wrt to unormalized waveform amplitudes
-            return w,wf.pdfdMarg,[dwg[0]/(wf.tlim[1]-wf.tlim[0]),dwg[1]/(wf.tlim[1]-wf.tlim[0])]
+            dwgout = [dwg[0]/(wf.tant*(wf.tlim[1]-wf.tlim[0])),dwg[1]/(wf.tant*(wf.tlim[1]-wf.tlim[0]))]
+            return w,wf.pdfdMarg,dwgout
         else:
             wf.PDFderiv(chainmatrix=dw)  # get derivative of W wrt to unormalized waveform amplitudes
-            return w,wf.pdfd,dwg/(wf.tlim[1]-wf.tlim[0])
+            return w,wf.pdfd,dwg/(wf.tant*(wf.tlim[1]-wf.tlim[0]))
     else:
         return w
     
@@ -373,11 +379,11 @@ def optfunc(x,data):
             - Combines derivatives using the chain rule and returns average Wasserstein misfit for time-amplitude marginals plus derivatives. 
     
     '''
-    [wfobs_target,distfunc,trange,grid,lambdav,transform,alpha] = data # get data block
+    [wfobs_target,distfunc,trange,grid,lambdav,transform,alpha,theta] = data # get data block
     
     tpos,wpos,dw = rickerwavelet(x[0],x[1],x[2],trange=trange,deriv=True)                # model parameters to ricker wavelets
 
-    wfsp,wfsourcep = BuildOTobjfromWaveform(tpos,wpos,grid,lambdav=lambdav,deriv=True,transform=transform)   # ricker wavelets to PDF of fingerprint
+    wfsp,wfsourcep = BuildOTobjfromWaveform(tpos,wpos,grid,lambdav=lambdav,deriv=True,transform=transform,theta=theta)   # ricker wavelets to PDF of fingerprint
  
     w2M,dr,dgM = CalcWasserWaveform(wfsourcep,wfobs_target,wfsp,distfunc=distfunc,deriv=True,returnmarg=True) # PDF of fringerprints to Wasserstein distances  
     
@@ -396,35 +402,6 @@ def optfunc(x,data):
     deriv[0] = dg # derivative of W_p wrt to window position along time axis.    return w2p
     ricker_util_opt.Wdata.append([w2,x,wfsp,deriv,wfsourcep])
     return w2,deriv
-
-#----------------------------------------------------------------------------------------------
-#
-# routines from iterative inversion
-#
-#----------------------------------------------------------------------------------------------
-# objective function for minimization used by scipy.optimize
-def optfunc_orig(x,data):
-    '''
-        Routine to act as an interface with scipy.minimize(). Actions
-            - takes model parameters and builds rickerwavelet (forward problem) plus derivatives
-            - takes rickerwavelet and builds fingerprint waveform object and OT object of 2D fingerprint density function.
-            - takes OT object and calculates Wasserstein misfits between time and amplitude marginals together with derivatives.
-            - Combines derivatives using the chain rule and returns average Wasserstein misfit for time-amplitude marginals plus derivatives. 
-    
-    '''
-    [wfobs_target,distfunc,trange,grid,lambdav] = data # get data block
-    
-    tpos,wpos,dw = rickerwavelet(x[0],x[1],x[2],trange=trange,deriv=True)                # model parameters to ricker wavelets
-
-    wfsp,wfsourcep = BuildOTobjfromWaveform(tpos,wpos,grid,lambdav=lambdav,deriv=True,transform=transform)   # ricker wavelets to PDF of fingerprint
- 
-    w2p,dr,dg = CalcWasserWaveform(wfsourcep,wfobs_target,wfsp,distfunc=distfunc,deriv=True) # PDF of fringerprints to Wasserstein distances  
-    # chain rule for dw/dm
-
-    deriv = dw.dot(dr)
-    deriv[0] = dg # derivative of W_p wrt to window position along time axis.    return w2p
-    ricker_util_opt.Wdata.append([w2p,x,wfsp,deriv,wfsourcep])
-    return w2p,deriv
 
 # callback function for recording each iteration of models used by scipy.optimize
 def recordresult(x):
@@ -574,7 +551,7 @@ def plotMarginals(wfwave,wf,tag='_',fxsize=None,fysize=None):
     fp.plot_LS(wfwave.dfield,wfwave,None,None," ",'black','grey',aspect=True,filename=filename,pdf=False,fxsize=fxsize,fysize=fysize)
     return
 
-def check_dwduFD(i,t,RF,dufd,grid,lambdav,wfobs_target,transform=False):
+def check_dwduFD(i,t,RF,dufd,grid,lambdav,wfobs_target,transform=False,theta=45.):
     '''
             Calculate derivatives of Wasserstein distance between time and amplitude marginals 
             with respect to waveform amplitudes by finite difference
@@ -582,12 +559,12 @@ def check_dwduFD(i,t,RF,dufd,grid,lambdav,wfobs_target,transform=False):
     RFp = np.copy(RF)
     dufdu = dufd*RF[i]/100.
     RFp[i]+=dufdu # pertub waveform +ve
-    wfsp,wfsourcep = BuildOTobjfromWaveform(t,RFp,grid,lambdav=lambdav,transform=transform)  # ricker wavelets to PDF of fingerprint
+    wfsp,wfsourcep = BuildOTobjfromWaveform(t,RFp,grid,lambdav=lambdav,transform=transform,theta=theta)  # ricker wavelets to PDF of fingerprint
     w2tp,w2up = CalcWasserWaveform(wfsourcep,wfobs_target,wfsp,distfunc='W2',returnmarg=True)[0] # PDF of fringerprints to Wasserstein distances  
     
     RFm = np.copy(RF)
     RFm[i]-=dufdu # pertub waveform +ve
-    wfsn,wfsourcen = BuildOTobjfromWaveform(t,RFm,grid,lambdav=lambdav,transform=transform)  # ricker wavelets to PDF of fingerprint
+    wfsn,wfsourcen = BuildOTobjfromWaveform(t,RFm,grid,lambdav=lambdav,transform=transform,theta=theta)  # ricker wavelets to PDF of fingerprint
     w2tn,w2un = CalcWasserWaveform(wfsourcen,wfobs_target,wfsn,distfunc='W2',returnmarg=True)[0] # PDF of fringerprints to Wasserstein distances    
 
     dwtdufd = (w2tp-w2tn)/(2*dufdu)
@@ -595,40 +572,35 @@ def check_dwduFD(i,t,RF,dufd,grid,lambdav,wfobs_target,transform=False):
     return dwtdufd,dwudufd
 
 # Finite difference of derivatives of W2 with respect to model parameters
-def check_dwdmFD(k,tpred,wpred,dm,mref,grid,lambdav,wfobs_target,trange,transform=False,returnmarg=True):
+def check_dwdmFD(k,tpred,wpred,dm,mref,grid,lambdav,wfobs_target,trange,transform=False,returnmarg=True,theta=45.):
     '''
             Calculate derivatives of Wasserstein distance between time and amplitude marginals 
             with respect ricker model parameters by finite difference
     '''
-    #wfs,wfsource = ru.BuildOTobjfromWaveform(tpred,wpred,grid,lambdav=lambdav,deriv=True)
-    #w2,dr,dg = ru.CalcWasserWaveform(wfsource,wfobs_target,wfs,distfunc='W2',deriv=True)
-    # chain rule for dw/dm
-    #deriv = dw.dot(dr)
-    #deriv[0] = dg # derivative of W_p wrt to window position along time axis.
 
     m = np.copy(mref)
     ds = dm*m[k]
     m[k] += ds
     if(returnmarg):
         tpos,wpos = rickerwavelet(m[0],m[1],m[2],trange=trange)                  # model parameters to ricker wavelets
-        wfsp,wfsourcep = BuildOTobjfromWaveform(tpos,wpos,grid,lambdav=lambdav,transform=transform)  # ricker wavelets to PDF of fingerprint
+        wfsp,wfsourcep = BuildOTobjfromWaveform(tpos,wpos,grid,lambdav=lambdav,transform=transform,theta=theta)  # ricker wavelets to PDF of fingerprint
         w2tp,w2up = CalcWasserWaveform(wfsourcep,wfobs_target,wfsp,distfunc='W2',returnmarg=True)[0] # PDF of fringerprints to Wasserstein distances  
         m = np.copy(mref)
         m[k] -= ds
         tneg,wneg = rickerwavelet(m[0],m[1],m[2],trange=trange)                  # model parameters to ricker wavelets
-        wfsn,wfsourcen = BuildOTobjfromWaveform(tneg,wneg,grid,lambdav=lambdav,transform=transform)  # ricker wavelets to PDF of fingerprint
+        wfsn,wfsourcen = BuildOTobjfromWaveform(tneg,wneg,grid,lambdav=lambdav,transform=transform,theta=theta)  # ricker wavelets to PDF of fingerprint
         w2tn,w2un = CalcWasserWaveform(wfsourcen,wfobs_target,wfsn,distfunc='W2',returnmarg=True)[0] # PDF of fringerprints to Wasserstein distances    
         fd0t = (w2tp-w2tn)/(2*ds)
         fd0u = (w2up-w2un)/(2*ds)
         return fd0t,fd0u
     else:
         tpos,wpos = rickerwavelet(m[0],m[1],m[2],trange=trange)                  # model parameters to ricker wavelets
-        wfsp,wfsourcep = BuildOTobjfromWaveform(tpos,wpos,grid,lambdav=lambdav,transform=transform)  # ricker wavelets to PDF of fingerprint
+        wfsp,wfsourcep = BuildOTobjfromWaveform(tpos,wpos,grid,lambdav=lambdav,transform=transform,theta=theta)  # ricker wavelets to PDF of fingerprint
         w2p = CalcWasserWaveform(wfsourcep,wfobs_target,wfsp,distfunc='W2') # PDF of fringerprints to Wasserstein distances  
         m = np.copy(mref)
         m[k] -= ds
         tneg,wneg = rickerwavelet(m[0],m[1],m[2],trange=trange)                  # model parameters to ricker wavelets
-        wfsn,wfsourcen = BuildOTobjfromWaveform(tneg,wneg,grid,lambdav=lambdav,transform=transform)  # ricker wavelets to PDF of fingerprint
+        wfsn,wfsourcen = BuildOTobjfromWaveform(tneg,wneg,grid,lambdav=lambdav,transform=transform,theta=theta)  # ricker wavelets to PDF of fingerprint
         w2n = CalcWasserWaveform(wfsourcen,wfobs_target,wfsn,distfunc='W2') # PDF of fringerprints to Wasserstein distances    
         fd0 = (w2p-w2n)/(2*ds)
         return fd0
