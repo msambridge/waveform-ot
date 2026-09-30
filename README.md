@@ -5,7 +5,10 @@ This package implements various algorithms described in [Sambridge, Jackson & Va
 ## Contents
 - [Introduction](#introduction)
 - [Package contents](#Package-contents)
+- [Installation and usage](#installation-and-usage)
+    - [Precomputed results (`pickles/`)](#precomputed-results-pickles)
     - [Seismogram software `pyprop8`](#Seismogram-software-pyprop8)
+    - [Versions](#versions)
 - [Citing this package](#citing-this-package)
 - [Acknowledgements](#acknowledgements)
 
@@ -36,12 +39,35 @@ To explore the examples:
 1. Obtain a copy of this package:
    - `git clone https://github.com/msambridge/waveform-ot.git`, or
    - Click the green 'Code' button on [this page](https://github.com/msambridge/waveform-ot/), select `Download ZIP`, and unzip the resulting file in an appropriate place on your system.
-2. Ensure that the following modules are available on your system: `numpy`, `scipy`, `tqdm`, `pyprop8`, `matplotlib`. A `requirements.txt` file is provided, so users of `pip` can simply `pip install -r requirements.txt`.
-3. Launch a Jupyter server, navigate to your `waveform-ot` directory, and run one or more of the notebooks.
+2. Ensure that the following modules are available on your system: `numpy`, `scipy`, `scikit-learn`, `tqdm`, `pyprop8`, `matplotlib`. A `requirements.txt` file is provided, so users of `pip` can simply `pip install -r requirements.txt`.
+3. For the three notebooks that use precomputed results, download them into `pickles/` (see below).
+4. Launch a Jupyter server, navigate to your `waveform-ot` directory, and run one or more of the notebooks.
+
+### Precomputed results (`pickles/`)
+
+Some calculations behind the figures are slow, so three notebooks can either compute their results or read them from files in the `pickles/` directory. That directory is empty in a fresh copy of the package. With their default settings these notebooks read the precomputed files, so download them first. The files used for the paper are attached to the [v1.0.2 release](https://github.com/msambridge/waveform-ot/releases/tag/v1.0.2) (about 134 MB). With the [GitHub CLI](https://cli.github.com/), from the `waveform-ot` directory:
+
+```bash
+gh release download v1.0.2 --dir pickles --pattern '*.pickle'
+```
+
+or download them from the release page and move them into `pickles/`. The release also includes `SHA256SUMS.txt` for checking the downloads.
+
+| Notebook | Files | Contents |
+|---|---|---|
+| `Ricker_Figs_1_7.ipynb` | `Wasserstein_L2W2_misfits_ricker_low_res.pickle`, `Wasserstein_L2W2_misfits_ricker_high_res.pickle` | Misfit profiles and surfaces (L2, W1, W2) for the double Ricker wavelet |
+| `source_location_cmt_W2L2_Figs_9_10_11.ipynb` | `OT_loc_low_res.pickle`, `OT_loc_high_res.pickle`, `L2_loc_low_res.pickle`, `L2_loc_high_res.pickle`, `L2_cmt.pickle` | Misfit grids over source location |
+| `source_location_cmt_W2L2_Fig_12.ipynb` | `OT_solutions_loc.pickle`, `OT_solutions_cmt.pickle`, `L2_solutions_loc.pickle`, `L2_solutions_cmt.pickle` | Results of repeated inversions from many starting points |
+
+Each of these notebooks also has settings near the top of its calculation section to compute the results itself and write its own pickle files instead; this can take from minutes to hours. The other notebooks don't use `pickles/`.
 
 ### Seismogram software `pyprop8`
 
 This notebook makes use of Andrew Valentine's `pyprop8` implementation of the seismogram calculation algorithm set out in [O'Toole & Woodhouse (2011)](https://doi.org/10.1111/j.1365-246X.2011.05210.x), together with the source derivatives set out in [O'Toole, Valentine & Woodhouse (2012)](https://doi.org/10.1111/j.1365-246X.2012.05608.x). Detailed installation and usage instructions can be found [here](https://pyprop8.readthedocs.io/); `pip install pyprop8` may suffice for many users.
+
+### Versions
+
+The version used for the paper is tagged [`v1.0.2`](https://github.com/msambridge/waveform-ot/releases/tag/v1.0.2). Later versions of `OTlib.py` (`OTlib.__version__`) add further routines and fix bugs while staying compatible with these examples, which give identical results with them. Tests for `OTlib.py` are in `tests/`: run `python tests/test_otlib_wasser.py` from the `waveform-ot` directory.
 
 ## Citing this package
 If you make use of this code, please acknowledge the work that went into developing it. In particular, if you are preparing a publication, we would appreciate it if you cite the paper describing the general method used here:
