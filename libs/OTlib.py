@@ -10,10 +10,14 @@
 #
 # Makes use of third party Linear programming and Monge-Ampere solvers and compares to analytically derived results
 #
-# M. Sambridge, 
+# M. Sambridge,
 # ANU June 2020.
 #
+# The version used for Sambridge, Jackson & Valentine (2022, GJI) is tagged
+# v1.0.2 in the waveform-ot repository.
 #
+__version__ = "1.1.0"
+
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import linprog
@@ -956,7 +960,7 @@ def wasser(source,
 
 # Calculations required for derivatives
     if(derivatives):
-        B = np.triu(np.ones((nf,ng)))
+        B = np.triu(np.ones((nf,nf))) # dF_j/dp_i = ([i<=j] - F_j)/A for the source CDF: nf x nf (was nf x ng, which failed unless nf == ng)
         C = (B-cf)/cfamp
         D = np.hstack((C[:,:-1],np.zeros((nf,ng))))
         Difftk = D[:,tkarg]
@@ -1355,6 +1359,8 @@ def barypath_pointmass1D(source,
     pdf_int_x[0] = source.x
     pdf_int_x[-1] = target.x
     return pdf_int_amp,pdf_int_x
+
+barypath_pointmass = barypath_pointmass1D # former name (v1.0.x), kept for backward compatibility
 
 def barypath1D(source,
              target,
