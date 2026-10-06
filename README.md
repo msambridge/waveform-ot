@@ -67,7 +67,7 @@ This notebook makes use of Andrew Valentine's `pyprop8` implementation of the se
 
 ### Versions
 
-The version used for the paper is tagged [`v1.0.2`](https://github.com/msambridge/waveform-ot/releases/tag/v1.0.2). Later versions of `OTlib.py` (`OTlib.__version__`) add further routines and fix bugs while staying compatible with these examples, which give identical results with them. Tests for `OTlib.py` are in `tests/`: run `python tests/test_otlib_wasser.py` from the `waveform-ot` directory.
+The version used for the paper is tagged [`v1.0.2`](https://github.com/msambridge/waveform-ot/releases/tag/v1.0.2). Later versions of `OTlib.py` (`OTlib.__version__`) add further routines and fix bugs while staying compatible with these examples, which give identical results with them. Since version 1.2.0, `OT.wasser(..., interp='linear')` (or `OT.wasser_linear`) treats each 1D PDF as continuous rather than as point masses: each node's mass is spread uniformly over its cell, so the Wasserstein distance is continuously differentiable in the PDF values and its derivatives need no condition on common CDF values. The default, `interp='point'`, is unchanged. Tests for `OTlib.py` are in `tests/`: run `python tests/test_otlib_wasser.py` and `python tests/test_otlib_wasser_linear.py` from the `waveform-ot` directory.
 
 ## Citing this package
 If you make use of this code, please acknowledge the work that went into developing it. In particular, if you are preparing a publication, we would appreciate it if you cite the paper describing the general method used here:

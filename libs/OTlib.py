@@ -16,7 +16,7 @@
 # The version used for Sambridge, Jackson & Valentine (2022, GJI) is tagged
 # v1.0.2 in the waveform-ot repository.
 #
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -852,7 +852,8 @@ def wasser(source,
            memory=False,
            checkCommonCDF=False,
            ignoreCommonCDFerror=False,
-           reflect=False):
+           reflect=False,
+           interp='point'):
     """
 
     Calculates pth power of Wasserstein metric W_p^p(f,g) 
@@ -882,6 +883,12 @@ def wasser(source,
         memory                  : set to True to save large memory matrices and replace python matrix sums with for loops. (default False)
         checkCommonCDF          : Checks input PDFs for condition to cause derivatives to fail (default False).
         ignoreCommonCDFerror    : Does not raise an error in derivative failure condition is found (default False).
+        interp                  : 'point' (default): each PDF is point masses at its nodes, as in all
+                                  earlier versions. 'linear': each node's mass is spread uniformly over
+                                  its cell, so the CDFs are piecewise linear and W is continuously
+                                  differentiable in the PDF values, with no condition on common CDF
+                                  values (see wasser_linear). 'linear' supports distfunc 'W1', 'W2',
+                                  'W12' and derivatives, not returnplan, reflect or distance arrays.
     
     Returns:
         
@@ -897,6 +904,13 @@ def wasser(source,
         dH/ds  = Derivative of H w.r.t. unormalised amplitudes of input source PDF (source.pdf)
     
     """
+
+    if(interp == 'linear'):
+        if(returnplan or reflect or not isinstance(distfunc, str)):
+            raise ValueError("wasser: interp='linear' supports distfunc 'W1', 'W2' or 'W12' and derivatives, not returnplan, reflect or distance arrays")
+        return wasser_linear(source,target,distfunc=distfunc,derivatives=derivatives)
+    if(interp != 'point'):
+        raise ValueError("wasser: interp must be 'point' or 'linear'")
 
     calcW1,calcW2,dfunc,distfunction_args = _checkdistfunc(distfunc)
 
@@ -1032,7 +1046,138 @@ def wasser(source,
             out += [dH]
     return out
 
-def reflectPDF(source): # makes PDF symmetric by reflection in upper limit and updates various quantities 
+def _cell_edges(x):
+    '''Edges of the cells around 1D nodes x (sorted): midpoints between neighbours, half a spacing beyond each end.'''
+    x = np.asarray(x, dtype=float)
+    if len(x) == 1:
+        return np.array([x[0], x[0]])
+    return np.concatenate(([x[0]-0.5*(x[1]-x[0])], 0.5*(x[1:]+x[:-1]), [x[-1]+0.5*(x[-1]-x[-2])]))
+
+
+def _int_hprime_linear(p, ua, ub, da, db, la, lb):
+    '''
+    Integral over [ua, ub] of h'(d(u)) * l(u), with d and l linear in u
+    (values da, db and la, lb at the ends), h'(d) = 2d for p=2 and
+    sign(d) for p=1. Exact: Simpson's rule for p=2 (the integrand is
+    quadratic), and a split at the root of d for p=1. Vectorised.
+    '''
+    du = ub-ua
+    if p == 2:
+        dm, lm = 0.5*(da+db), 0.5*(la+lb)
+        return du/6.*(2*da*la+4*2*dm*lm+2*db*lb)
+    sa, sb = np.sign(da), np.sign(db)
+    same = sa*sb >= 0
+    whole = np.where(sa != 0, sa, sb)*du*0.5*(la+lb)      # no sign change inside
+    with np.errstate(divide='ignore', invalid='ignore'):
+        r = np.where(same, 0.5, da/(da-db))                 # fraction of the interval before the root
+    lr = la+r*(lb-la)
+    split = sa*r*du*0.5*(la+lr)+sb*(1-r)*du*0.5*(lr+lb)
+    return np.where(same, whole, split)
+
+
+def _int_h_linear(p, ds, da, db):
+    '''Integral of h(d) = |d|^p over an interval of length ds on which d is linear (ends da, db). Vectorised.'''
+    if p == 2:
+        return ds*(da*da+da*db+db*db)/3.
+    same = da*db >= 0
+    with np.errstate(divide='ignore', invalid='ignore'):
+        cross = ds*(da*da+db*db)/(2*(np.abs(da)+np.abs(db)))
+    return np.where(same, ds*0.5*(np.abs(da)+np.abs(db)), cross)
+
+
+def wasser_linear(source, target, distfunc='W12', derivatives=False):
+    """
+
+    W_p^p between two 1D PDFs and, optionally, its derivatives, treating
+    each PDF as continuous rather than as point masses: node i's mass is
+    spread uniformly over its cell (midpoints between neighbouring nodes,
+    half a spacing beyond each end), so each CDF is piecewise linear and
+    each quantile function is continuous and piecewise linear. W_p^p =
+    integral over s in [0,1] of |Q_f(s) - Q_g(s)|^p is then computed exactly.
+
+    Unlike wasser's point-mass formula, the result is continuously
+    differentiable in the PDF values: its derivatives don't jump when a
+    source CDF value passes a target CDF value, so no condition on common
+    CDF values is needed (checkCommonCDF / TargetSourceCDFError don't apply).
+    Remaining exceptions: W1 has no unique derivative where Q_f = Q_g over
+    an interval (an exact fit), and where both PDFs have zero-mass cells at
+    the same CDF level. A zero-mass source cell gets the one-sided
+    derivative (adding mass to it).
+
+    Parameters:
+        source, target : 1D OTpdf objects (sorted x)
+        distfunc       : 'W1', 'W2' (W2 squared) or 'W12'
+        derivatives    : also return derivatives with respect to the
+                         unnormalised source amplitudes (source.pdf*source.amp)
+                         and to a translation of the source (x -> x + x0)
+
+    Returns: a list, as wasser does:
+        [W1, dW1, dW1/dx0, W2, dW2, dW2/dx0], with the W1 or W2 entries
+        omitted according to distfunc and the derivative entries omitted
+        unless derivatives=True.
+    """
+    calcW1, calcW2, dfunc, _ = _checkdistfunc(distfunc)
+    if dfunc:
+        raise ValueError("wasser_linear: distfunc must be 'W1', 'W2' or 'W12'")
+    if source.type != '1D' or target.type != '1D':
+        raise TargetSource2DShapeError
+    ef, eg = _cell_edges(source.x), _cell_edges(target.x)
+    Cf = np.concatenate(([0.], source.cdf))          # CDF levels at the cell edges, Cf[-1] = 1
+    Cg = np.concatenate(([0.], target.cdf))
+    wf, wg = np.diff(ef), np.diff(eg)                 # cell widths
+    nf = source.n
+
+    # merged CDF levels; on each interval between them both quantile functions are linear
+    S = np.unique(np.concatenate((Cf, Cg)))
+    Sa, Sb = S[:-1], S[1:]
+    # cell of each interval, located from its lower end Sa (C[i] <= Sa < C[i+1]),
+    # not its midpoint: adjacent levels can be neighbouring floats (e.g. near
+    # CDF = 1), whose midpoint rounds onto one of them
+    i = np.clip(np.searchsorted(Cf, Sa, side='right')-1, 0, nf-1)        # source cell of each interval
+    j = np.clip(np.searchsorted(Cg, Sa, side='right')-1, 0, target.n-1)
+    mfi, mgj = Cf[i+1]-Cf[i], Cg[j+1]-Cg[j]
+    # positions within the cells as fractions u in [0,1] (clipped against rounding in tiny cells)
+    ua, ub = np.clip((Sa-Cf[i])/mfi, 0., 1.), np.clip((Sb-Cf[i])/mfi, 0., 1.)
+    va, vb = np.clip((Sa-Cg[j])/mgj, 0., 1.), np.clip((Sb-Cg[j])/mgj, 0., 1.)
+    da = (ef[i]+wf[i]*ua)-(eg[j]+wg[j]*va)            # Q_f - Q_g at the ends of each interval
+    db = (ef[i]+wf[i]*ub)-(eg[j]+wg[j]*vb)
+    ds = Sb-Sa
+
+    if derivatives:
+        # zero-mass source cells (gaps): Q_f jumps across them; their one-sided
+        # derivative uses Q_g at that CDF level
+        gap = np.where(np.diff(Cf) <= 0.)[0]
+        sg = Cf[gap]
+        jg = np.clip(np.searchsorted(Cg, sg, side='right')-1, 0, target.n-1)
+        Qg_gap = eg[jg]+wg[jg]*np.clip((sg-Cg[jg])/np.where(Cg[jg+1] > Cg[jg], Cg[jg+1]-Cg[jg], 1.), 0., 1.)
+
+    out = []
+    for p, calc in [(1, calcW1), (2, calcW2)]:
+        if not calc:
+            continue
+        out += [np.sum(_int_h_linear(p, ds, da, db))]
+        if derivatives:
+            # dW/dC_k for each source CDF level C_k: within source cell i,
+            # Q_f = ef[i] + wf[i] u with u = (s - C_i)/(C_{i+1} - C_i), so
+            # dQ_f/dC_{i+1} ds = -wf[i] u du and dQ_f/dC_i ds = wf[i] (u - 1) du
+            # (the end terms of the moving limits cancel, Q_f being continuous at each level)
+            g = np.zeros(nf+1)
+            np.add.at(g, i+1, _int_hprime_linear(p, ua, ub, da, db, -wf[i]*ua, -wf[i]*ub))
+            np.add.at(g, i, _int_hprime_linear(p, ua, ub, da, db, wf[i]*(ua-1.), wf[i]*(ub-1.)))
+            if len(gap):
+                d0, d1 = ef[gap]-Qg_gap, ef[gap+1]-Qg_gap
+                np.add.at(g, gap+1, _int_hprime_linear(p, 0., 1., d0, d1, 0.*d0, -wf[gap]))
+                np.add.at(g, gap, _int_hprime_linear(p, 0., 1., d0, d1, -wf[gap], 0.*d0))
+            # chain to the unnormalised source amplitudes: dC_k/dp_m = ([m < k] - C_k)/A
+            above = np.cumsum(g[::-1])[::-1]                       # sum over k >= m+1 is above[m+1]
+            dW = (above[1:]-np.dot(g, Cf))/source.amp
+            # translation of the source: Q_f -> Q_f + x0
+            dx0 = np.sum(_int_hprime_linear(p, 0.*ds, ds, da, db, 1.+0.*ds, 1.+0.*ds))
+            out += [dW, dx0]
+    return out
+
+
+def reflectPDF(source): # makes PDF symmetric by reflection in upper limit and updates various quantities
     x = source.x
     pdf = source.pdf
     ddx = x[1]-x[0]
